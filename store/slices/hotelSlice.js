@@ -6,33 +6,23 @@ export const searchHotel = createAsyncThunk(
   "hotel/searchHotel",
   async (searchParams, { rejectWithValue }) => {
     try {
-      // Check if searchParams is empty or all values are empty/undefined
-      if (
-        !searchParams ||
-        Object.values(searchParams).every(
-          (value) =>
-            value === undefined ||
-            value === null ||
-            (typeof value === "string" && value.trim() === "") ||
-            (Array.isArray(value) && value.length === 0)
-        )
-      ) {
-        // Return empty data early without API call
-        return { data: [] };
+      // Normalize params: map city -> search (backend expects `search=Patna`)
+      const paramsObj = { ...(searchParams || {}) };
+      if (paramsObj.city && !paramsObj.search) {
+        paramsObj.search = paramsObj.city;
+        delete paramsObj.city;
       }
 
-      const params = new URLSearchParams(searchParams);
-      // URLSearchParams encodes spaces as '+'. Replace '+' with '%20' so multi-word
-      // city names are transmitted as spaces (Uttar Pradesh -> Uttar%20Pradesh)
+      const params = new URLSearchParams(paramsObj);
       let qs = params.toString();
+      // replace + with %20 for spaces
       qs = qs.replace(/\+/g, "%20");
-      if (!qs) {
-        return { data: [] };
-      }
+      if (!qs) return { data: [] };
       const response = await api.get(`/hotels/filters?${qs}`);
-      console.log('searchHotel qs=', qs, "here is");
+      console.log('searchHotel response:', response.data);
       return response.data;
     } catch (error) {
+      // Extract the error message from the error object
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -54,6 +44,7 @@ const hotelSlice = createSlice({
       })
       .addCase(searchHotel.fulfilled, (state, action) => {
         state.loading = false;
+        // API returns { success: true, data: [...] }, so extract the data array
         state.data = action.payload?.data || action.payload || [];
       })
       .addCase(searchHotel.rejected, (state, action) => {
