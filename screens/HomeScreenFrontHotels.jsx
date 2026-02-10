@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useContext } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   ScrollView,
   Image,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { NavigationContext } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { frontHotels } from "../store/slices/hotelSlice";
 import { Ionicons } from "@expo/vector-icons";
@@ -116,14 +116,28 @@ const SkeletonCard = () => (
 );
 
 export default function HomeScreenFrontHotels() {
+  const navigation = useContext(NavigationContext);
   const dispatch = useDispatch();
-  const navigation = useNavigation();
   // Use separate featured* state properties
   const { featuredData: hotelsRaw, featuredLoading: loading, featuredError: error } = useSelector((state) => state.hotel);
 
   useEffect(() => {
     dispatch(frontHotels());
   }, [dispatch]);
+
+  const handleNavigate = (hotelId) => {
+    if (navigation) {
+        navigation.navigate("HotelDetails", { hotelId });
+    } else {
+        console.warn("Navigation context is missing in HomeScreenFrontHotels");
+    }
+  };
+
+  const handleNavigateAll = () => {
+    if (navigation) {
+        navigation.navigate("Hotels");
+    }
+  };
 
   const hotels = useMemo(() => (Array.isArray(hotelsRaw) ? hotelsRaw : []), [hotelsRaw]);
 
@@ -143,7 +157,7 @@ export default function HomeScreenFrontHotels() {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => navigation.navigate("Hotels")}
+            onPress={handleNavigateAll}
             className="px-3 py-1.5 rounded-full bg-slate-100"
           >
             <Text className="text-[11px] font-extrabold text-slate-700">
@@ -216,11 +230,11 @@ export default function HomeScreenFrontHotels() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
         >
-          {hotels.map((hotel) => (
+          {hotels.map((hotel, idx) => (
             <HotelCard
-              key={hotel._id}
+              key={hotel._id || hotel.hotelId || idx}
               hotel={hotel}
-              onPress={() => navigation.navigate("HotelDetails", { hotelId: hotel.hotelId })}
+              onPress={() => handleNavigate(hotel.hotelId)}
             />
           ))}
         </ScrollView>

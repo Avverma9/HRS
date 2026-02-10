@@ -7,24 +7,25 @@ import { Provider } from 'react-redux';
 import { store } from './store';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import ThemedStatusBar from './components/ThemedStatusBar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Text, View, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
-import ThemedStatusBar from './components/ThemedStatusBar';
 import Toast from 'react-native-toast-message';
 
-import BootScreen from './screens/BootScreen';
-import LoginPage from './screens/LoginRN';
-import RegisterPage from './screens/Register';
+// Import screen components
 import Home from './screens/Home';
+import BootScreen from './screens/BootScreen';
 import Cabs from './screens/Cabs';
 import Holidays from './screens/Holidays';
 import Tour from './screens/Tour';
 import Hotels from './screens/Hotels';
 import HotelDetails from './screens/HotelDetails';
+import LoginPage from './screens/LoginRN';
+import RegisterPage from './screens/Register';
 import Profile from './screens/Profile';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -32,9 +33,11 @@ const SearchStack = createNativeStackNavigator();
 
 // Professional Tab Bar Component
 function TabBar({ state, descriptors, navigation }) {
+  // Safe area insets from safe-area-context, safe to use inside NavigationContainer or outside if Provider is present
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
 
+  // Basic guard against missing routes
   if (!state?.routes || !descriptors) return null;
 
   const focusedOptions = descriptors[state.routes[state.index].key]?.options;
@@ -45,12 +48,15 @@ function TabBar({ state, descriptors, navigation }) {
   return (
     <View 
       className="bg-white border-t border-gray-200"
-      style={{ paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8 }}
+      style={{ 
+        paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8 
+      }}
     >
       <View className="flex-row justify-around items-center h-16 px-2">
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label = options.tabBarLabel ?? options.title ?? route.name;
+
           const isFocused = state.index === index;
 
           const onPress = () => {
@@ -65,19 +71,37 @@ function TabBar({ state, descriptors, navigation }) {
           };
 
           const onLongPress = () => {
-            navigation.emit({ type: 'tabLongPress', target: route.key });
+            navigation.emit({ 
+              type: 'tabLongPress', 
+              target: route.key 
+            });
           };
 
           const color = isFocused ? '#0d3b8f' : '#64748b'; 
-          const size = 26; 
-          let iconName = "alert-circle";
-          switch (route.name) {
-            case 'Search': iconName = isFocused ? "search" : "search-outline"; break;
-            case 'Cabs': iconName = isFocused ? "car" : "car-outline"; break;
-            case 'Holidays': iconName = isFocused ? "sunny" : "sunny-outline"; break;
-            case 'Tour': iconName = isFocused ? "map" : "map-outline"; break;
-            case 'Profile': iconName = isFocused ? "person-circle" : "person-circle-outline"; break;
-          }
+
+          const IconComp = () => {
+            const size = 26; 
+            let iconName = "alert-circle";
+
+            switch (route.name) {
+              case 'Search':
+                iconName = isFocused ? "search" : "search-outline";
+                break;
+              case 'Cabs':
+                 iconName = isFocused ? "car" : "car-outline";
+                break;
+              case 'Holidays':
+                iconName = isFocused ? "sunny" : "sunny-outline";
+                break;
+              case 'Tour':
+                iconName = isFocused ? "map" : "map-outline";
+                break;
+              case 'Profile':
+                iconName = isFocused ? "person-circle" : "person-circle-outline";
+                break;
+            }
+            return <Ionicons name={iconName} size={size} color={color} />;
+          };
 
           return (
             <TouchableOpacity
@@ -92,10 +116,10 @@ function TabBar({ state, descriptors, navigation }) {
               activeOpacity={0.7}
             >
               <View className="items-center">
-                <Ionicons name={iconName} size={size} color={color} />
+                <IconComp />
                 <Text 
-                  style={{ color }}
-                  className="text-[10px] font-medium mt-1"
+                  style={{ color: color }}
+                  className={`text-[10px] font-medium mt-1`}
                   numberOfLines={1}
                 >
                   {label}
@@ -122,7 +146,9 @@ function SearchStackNavigator() {
 function TabNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+      }}
       tabBar={(props) => <TabBar {...props} />}
     >
       <Tab.Screen
@@ -136,48 +162,75 @@ function TabNavigator() {
           };
         }}
       />
-      <Tab.Screen name="Cabs" component={Cabs} options={{ title: 'Cabs' }} />
-      <Tab.Screen name="Holidays" component={Holidays} options={{ title: 'Holidays' }} />
-      <Tab.Screen name="Tour" component={Tour} options={{ title: 'Tours' }} />
-      <Tab.Screen name="Profile" component={Profile} options={{ title: 'Profile' }} />
+      <Tab.Screen
+        name="Cabs"
+        component={Cabs}
+        options={{
+          title: 'Cabs',
+          headerTitle: 'Book Your Ride',
+        }}
+      />
+      <Tab.Screen
+        name="Holidays"
+        component={Holidays}
+        options={{
+          title: 'Holidays',
+          headerTitle: 'Holiday Packages',
+        }}
+      />
+      <Tab.Screen
+        name="Tour"
+        component={Tour}
+        options={{
+          title: 'Tours',
+          headerTitle: 'Guided Tours',
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={Profile}
+        options={{
+          title: 'Profile',
+        }}
+      />
     </Tab.Navigator>
   );
 }
 
 function LoadingScreen() {
   return (
-    <View style={{flex:1,justifyContent:'center',alignItems:'center',backgroundColor:'#fff'}}>
-      <ActivityIndicator size="large" color="#0d3b8f" />
+    <View className="flex-1 justify-center items-center bg-white">
+      <ActivityIndicator size="large" color="#2563eb" />
     </View>
   );
 }
 
 function RootNavigator() {
-  const [showBoot, setShowBoot] = useState(true);
-  const { isSignedIn } = useAuth();
+    const [showBoot, setShowBoot] = useState(true);
+    const { isSignedIn } = useAuth();
 
-  useEffect(() => {
-    const timer = setTimeout(() => setShowBoot(false), 3000);
-    return () => clearTimeout(timer);
-  }, []);
+    useEffect(() => {
+        const timer = setTimeout(() => setShowBoot(false), 3000);
+        return () => clearTimeout(timer);
+    }, []);
 
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-      {showBoot ? (
-        <Stack.Screen name="Boot" component={BootScreen} />
-      ) : isSignedIn === null ? (
-        <Stack.Screen name="Loading" component={LoadingScreen} />
-      ) : isSignedIn ? (
-        <Stack.Screen name="MainTabs" component={TabNavigator} />
-      ) : (
-        <>
-          <Stack.Screen name="Login" component={LoginPage} />
-          <Stack.Screen name="Register" component={RegisterPage} />
-          <Stack.Screen name="MainTabs" component={TabNavigator} />
-        </>
-      )}
-    </Stack.Navigator>
-  );
+    return (
+        <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
+            {showBoot ? (
+                <Stack.Screen name="Boot" component={BootScreen} />
+            ) : isSignedIn === null ? (
+                <Stack.Screen name="Loading" component={LoadingScreen} />
+            ) : isSignedIn ? (
+                <Stack.Screen name="MainTabs" component={TabNavigator} />
+            ) : (
+                <>
+                    <Stack.Screen name="Login" component={LoginPage} />
+                    <Stack.Screen name="Register" component={RegisterPage} />
+                    <Stack.Screen name="MainTabs" component={TabNavigator} />
+                </>
+            )}
+        </Stack.Navigator>
+    );
 }
 
 export default function App() {

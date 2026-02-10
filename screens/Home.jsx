@@ -1,15 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, StatusBar } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchLocation } from "../store/slices/locationSlice";
 import { searchHotel } from "../store/slices/hotelSlice";
-import { useNavigation } from "@react-navigation/native";
 import Header from "../components/Header";
 import SearchCard from "../components/SearchCard";
 import PopularDestinations from "../components/PopularDestinations";
 import HomeScreenFrontHotels from "./HomeScreenFrontHotels";
 
-const Home = () => {
+const Home = ({ navigation }) => {
   // --- State Management ---
   const [searchCity, setSearchCity] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -44,11 +43,15 @@ const Home = () => {
 
   // --- Redux & Navigation ---
   const dispatch = useDispatch();
-  const navigation = useNavigation();
   const { data: locations } = useSelector((state) => state.location);
+
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     dispatch(fetchLocation());
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [dispatch]);
 
   // --- Calendar Matrix Generator ---
@@ -87,7 +90,7 @@ const Home = () => {
   const handleSelect = async (title) => {
     try {
       setSearchCity(title);
-      setIsSearching(true);
+      if (isMountedRef.current) setIsSearching(true);
       await dispatch(
         searchHotel({ city: title, checkInDate, checkOutDate, countRooms, guests })
       ).unwrap();
@@ -96,7 +99,7 @@ const Home = () => {
       Alert.alert("Search failed", err?.toString());
       navigation.navigate("Hotels", { searchQuery: title });
     } finally {
-      setIsSearching(false);
+      if (isMountedRef.current) setIsSearching(false);
     }
   };
 
@@ -107,7 +110,7 @@ const Home = () => {
     }
     const city = searchCity.trim();
     try {
-      setIsSearching(true);
+      if (isMountedRef.current) setIsSearching(true);
       await dispatch(
         searchHotel({ city, checkInDate, checkOutDate, countRooms, guests })
       ).unwrap();
@@ -128,7 +131,7 @@ const Home = () => {
         countRooms
       });
     } finally {
-      setIsSearching(false);
+      if (isMountedRef.current) setIsSearching(false);
     }
   };
 
@@ -152,7 +155,7 @@ const Home = () => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
       >
         <Header />
         <SearchCard
@@ -172,6 +175,23 @@ const Home = () => {
 
         <PopularDestinations locations={locations} onSelectLocation={handleSelect} />
         <HomeScreenFrontHotels />
+
+        {/* Footer Brand */}
+        <View className="px-4 mt-6 mb-0">
+          <View className="rounded-3xl bg-slate-100/80 border border-slate-200/70 py-7 px-6 items-center overflow-hidden">
+            {/* Soft pattern */}
+            <View className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-slate-200/40" />
+            <View className="absolute -bottom-12 -left-10 w-36 h-36 rounded-full bg-slate-200/40" />
+            <View className="absolute top-6 right-10 w-14 h-14 rounded-full bg-blue-100/60" />
+
+            <Text className="text-[12px] font-extrabold text-slate-500 tracking-[4px]">
+              HOTELROOMSSTAY
+            </Text>
+            <Text className="text-sm text-slate-400 font-medium mt-2 text-center">
+              Find stays you'll love, anywhere you go.
+            </Text>
+          </View>
+        </View>
       </ScrollView>
       <Modal visible={showDateModal} transparent animationType="fade">
         <View className="flex-1 bg-black/60 justify-center items-center px-4">

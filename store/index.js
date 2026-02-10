@@ -3,6 +3,7 @@ import userSlice from "./slices/userSlice";
 import locationSlice from "./slices/locationSlice";
 import hotelSlice from "./slices/hotelSlice";
 import additionalSlice from "./slices/additionalSlice";
+import bookingSlice from "./slices/bookingSlice";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     location: locationSlice,
     hotel: hotelSlice,
     additional: additionalSlice,
+    booking: bookingSlice,
   },
 });
 

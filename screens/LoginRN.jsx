@@ -208,7 +208,7 @@ export default function LoginPage({ navigation }) {
   await AsyncStorage.setItem("roomsstayUserEmail", res.data.email || "");
   await signIn(res.data.rsToken, res.data.userId);
       showToast("success", "Success", "Logged in");
-      navigation.replace("Home");
+      navigation.replace("MainTabs");
     } catch (err) {
       showToast(
         "error",
@@ -271,7 +271,7 @@ export default function LoginPage({ navigation }) {
       }
   await signIn(res.data.rsToken, res.data.userId);
       showToast("success", "Success", "Logged in");
-      navigation.replace("Home");
+      navigation.replace("MainTabs");
     } catch (err) {
       showToast(
         "error",

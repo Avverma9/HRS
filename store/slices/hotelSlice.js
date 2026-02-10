@@ -12,12 +12,32 @@ export const searchHotel = createAsyncThunk(
         paramsObj.search = paramsObj.city;
         delete paramsObj.city;
       }
+      // Map UI param names to backend expectations
+      if (paramsObj.roomType && !paramsObj.type) {
+        paramsObj.type = paramsObj.roomType;
+        delete paramsObj.roomType;
+      }
+      if (paramsObj.bedType && !paramsObj.bedTypes) {
+        paramsObj.bedTypes = paramsObj.bedType;
+        delete paramsObj.bedType;
+      }
 
-      const params = new URLSearchParams(paramsObj);
+      // Ensure pagination + countRooms defaults
+      if (paramsObj.page == null) paramsObj.page = 1;
+      if (paramsObj.limit == null) paramsObj.limit = 10;
+      if (paramsObj.countRooms == null) paramsObj.countRooms = 1;
+
+      const params = new URLSearchParams();
+      Object.entries(paramsObj).forEach(([key, value]) => {
+        if (value === undefined || value === null) return;
+        const v = String(value).trim();
+        if (v === "") return;
+        params.append(key, v);
+      });
+
       let qs = params.toString();
       // replace + with %20 for spaces
       qs = qs.replace(/\+/g, "%20");
-      if (!qs) return { data: [] };
       const response = await api.get(`/hotels/filters?${qs}`);
       return response.data;
     } catch (error) {
@@ -59,6 +79,12 @@ const hotelSlice = createSlice({
     data: [], // For search results
     loading: false,
     error: null,
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 0,
+    filters: null,
+    gstInfo: null,
     // Separate state for featured/front hotels
     featuredData: [],
     featuredLoading: false,
@@ -79,6 +105,12 @@ const hotelSlice = createSlice({
         state.loading = false;
         // API returns { success: true, data: [...] }, so extract the data array
         state.data = action.payload?.data || action.payload || [];
+        state.total = action.payload?.total ?? state.data.length ?? 0;
+        state.page = action.payload?.page ?? 1;
+        state.limit = action.payload?.limit ?? 10;
+        state.totalPages = action.payload?.totalPages ?? 0;
+        state.filters = action.payload?.filters ?? null;
+        state.gstInfo = action.payload?.gstInfo ?? null;
       })
       .addCase(searchHotel.rejected, (state, action) => {
         state.loading = false;
