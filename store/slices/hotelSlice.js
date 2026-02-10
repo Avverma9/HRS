@@ -38,7 +38,19 @@ export const frontHotels = createAsyncThunk(
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
-);  
+);
+
+export const getHotelById = createAsyncThunk(
+  "hotel/getHotelById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`/hotels/get-by-id/${id}`);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
   
 // Create the slice
 const hotelSlice = createSlice({
@@ -51,6 +63,10 @@ const hotelSlice = createSlice({
     featuredData: [],
     featuredLoading: false,
     featuredError: null,
+    // Separate state for selected hotel details
+    selectedHotel: null,
+    selectedHotelLoading: false,
+    selectedHotelError: null,
   },
   extraReducers: (builder) => {
     builder
@@ -81,6 +97,21 @@ const hotelSlice = createSlice({
       .addCase(frontHotels.rejected, (state, action) => {
         state.featuredLoading = false;
         state.featuredError = action.payload;
+      })
+
+      // --- Get Hotel By ID Cases ---
+      .addCase(getHotelById.pending, (state) => {
+        state.selectedHotelLoading = true;
+        state.selectedHotelError = null;
+        state.selectedHotel = null;
+      })
+      .addCase(getHotelById.fulfilled, (state, action) => {
+        state.selectedHotelLoading = false;
+        state.selectedHotel = action.payload?.data || null;
+      })
+      .addCase(getHotelById.rejected, (state, action) => {
+        state.selectedHotelLoading = false;
+        state.selectedHotelError = action.payload;
       });
   },
 });

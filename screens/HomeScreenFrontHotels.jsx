@@ -220,7 +220,7 @@ export default function HomeScreenFrontHotels() {
             <HotelCard
               key={hotel._id}
               hotel={hotel}
-              onPress={() => navigation.navigate("HotelDetails", { hotelId: hotel._id })}
+              onPress={() => navigation.navigate("HotelDetails", { hotelId: hotel.hotelId })}
             />
           ))}
         </ScrollView>

@@ -18,6 +18,7 @@ import Cabs from './screens/Cabs';
 import Holidays from './screens/Holidays';
 import Tour from './screens/Tour';
 import Hotels from './screens/Hotels';
+import HotelDetails from './screens/HotelDetails';
 import LoginPage from './screens/LoginRN';
 import RegisterPage from './screens/Register';
 import Profile from './screens/Profile';
@@ -70,25 +71,38 @@ function TabBar({ state, descriptors, navigation }) {
             });
           };
 
-          const color = isFocused ? '#2563eb' : '#64748b';
+          // Active color matches the Header's brand blue
+          const color = isFocused ? '#0d3b8f' : '#64748b'; 
 
-          // Icon component per route
+          // Icon component per route using only Ionicons
           const IconComp = () => {
-            const size = 24;
+            const size = 26; // Slightly larger for better visibility
+            let iconName = "alert-circle";
+
             switch (route.name) {
               case 'Search':
-                return <MaterialCommunityIcons name="magnify" size={size} color={color} />;
+                // Image: Magnifying glass
+                iconName = isFocused ? "search" : "search-outline";
+                break;
               case 'Cabs':
-                return <MaterialCommunityIcons name="car" size={size} color={color} />;
+                // Image: Car (Front view logic: Ionicons 'car' is side, 'car-sport' is side. 
+                // Closest in Ionicons is 'car' or 'bus' for front, but sticking to 'car' for semantic match)
+                 iconName = isFocused ? "car" : "car-outline";
+                break;
               case 'Holidays':
-                return <Ionicons name="sunny" size={size} color={color} />;
+                // Image: Sun
+                iconName = isFocused ? "sunny" : "sunny-outline";
+                break;
               case 'Tour':
-                return <FontAwesome5 name="map-marked-alt" size={20} color={color} />;
+                // Image: Map
+                iconName = isFocused ? "map" : "map-outline";
+                break;
               case 'Profile':
-                return <MaterialCommunityIcons name="account-circle" size={size} color={color} />;
-              default:
-                return <MaterialCommunityIcons name="circle" size={size} color={color} />;
+                // Image: Person in circle
+                iconName = isFocused ? "person-circle" : "person-circle-outline";
+                break;
             }
+            return <Ionicons name={iconName} size={size} color={color} />;
           };
 
           return (
@@ -106,11 +120,8 @@ function TabBar({ state, descriptors, navigation }) {
               <View className="items-center">
                 <IconComp />
                 <Text 
-                  className={`text-xs mt-1 ${
-                    isFocused 
-                      ? 'text-blue-600 font-semibold' 
-                      : 'text-slate-500 font-normal'
-                  }`}
+                  style={{ color: color }}
+                  className={`text-[10px] font-medium mt-1`}
                   numberOfLines={1}
                 >
                   {label}
@@ -224,6 +235,7 @@ function ThemedApp() {
         <>
           <Stack.Screen name="Home" component={TabNavigator} />
           <Stack.Screen name="Hotels" component={Hotels} />
+          <Stack.Screen name="HotelDetails" component={HotelDetails} />
         </>
       ) : (
         // Unauthenticated routes
@@ -232,6 +244,7 @@ function ThemedApp() {
           <Stack.Screen name="Register" component={RegisterPage} />
           <Stack.Screen name="Home" component={TabNavigator} />
           <Stack.Screen name="Hotels" component={Hotels} />
+          <Stack.Screen name="HotelDetails" component={HotelDetails} />
         </>
       )}
     </Stack.Navigator>

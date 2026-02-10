@@ -2,11 +2,14 @@ import { configureStore } from "@reduxjs/toolkit";
 import userSlice from "./slices/userSlice";
 import locationSlice from "./slices/locationSlice";
 import hotelSlice from "./slices/hotelSlice";
+import additionalSlice from "./slices/additionalSlice";
+
 export const store = configureStore({
   reducer: {
     user: userSlice,
     location: locationSlice,
-    hotel:hotelSlice,
+    hotel: hotelSlice,
+    additional: additionalSlice,
   },
 });
 
