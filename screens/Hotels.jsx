@@ -8,12 +8,17 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  Platform,
+  StatusBar,
+  Modal,
+  TextInput
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { searchHotel } from "../store/slices/hotelSlice";
 import { LinearGradient } from "expo-linear-gradient";
-import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import SearchCard from "../components/SearchCard";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 32;
@@ -22,16 +27,130 @@ const Hotels = () => {
   const dispatch = useDispatch();
   const navigation = useNavigation();
   const route = useRoute();
-  const { searchQuery } = route.params || {};
+  const { searchQuery, checkInDate, checkOutDate, guests, countRooms } = route.params || {};
   
   const { data: hotels, loading, error } = useSelector((state) => state.hotel);
 
+  // Filter Modal State
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [dateModalTarget, setDateModalTarget] = useState("in"); 
+
+  const iso = (d) => { try { return d.toISOString().split("T")[0]; } catch(e) { return "2026-02-10"; } }; 
+  const display = (d) => { try { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); } catch(e) { return ""; } };
+
+  // Local Search state (for the modal)
+  const [localCity, setLocalCity] = useState(searchQuery || "");
+  const [localRooms, setLocalRooms] = useState(Number(countRooms) || 1);
+  const [localGuests, setLocalGuests] = useState(Number(guests) || 2);
+  const [localCheckIn, setLocalCheckIn] = useState(checkInDate || iso(new Date()));
+  const [localCheckOut, setLocalCheckOut] = useState(checkOutDate || iso(new Date(Date.now() + 86400000)));
+  const [calendarBase, setCalendarBase] = useState(new Date(localCheckIn));
+
+  // Filter States
+  const [priceRange, setPriceRange] = useState(null); 
+  const [selectedStar, setSelectedStar] = useState(null); 
+  const [selectedAmenities, setSelectedAmenities] = useState([]);
+
+  // Helper to construct filter params and dispatch search
+  const performSearch = (extras = {}) => {
+    // Construct base payload
+    const payload = {
+      city: localCity,
+      checkInDate: localCheckIn,
+      checkOutDate: localCheckOut,
+      guests: localGuests ? Number(localGuests) : 1,
+      countRooms: localRooms ? Number(localRooms) : 1,
+      ...extras // e.g. minPrice, maxPrice, starRating, amenities
+    };
+
+    dispatch(searchHotel(payload));
+  };
+
   useEffect(() => {
-    if (searchQuery) {
-      // Only send the 'where to' query (city/location)
-      dispatch(searchHotel({ city: searchQuery }));
+     if (searchQuery) setLocalCity(searchQuery);
+     if (checkInDate) setLocalCheckIn(checkInDate);
+     if (checkOutDate) setLocalCheckOut(checkOutDate);
+     if (guests) {
+         setLocalGuests(Number(guests)); 
+       }
+     if (countRooms) setLocalRooms(Number(countRooms));
+  }, [searchQuery, checkInDate, checkOutDate, guests, countRooms]);
+
+  const toggleAmenity = (amenity) => {
+    if (selectedAmenities.includes(amenity)) {
+      setSelectedAmenities(prev => prev.filter(a => a !== amenity));
+    } else {
+      setSelectedAmenities(prev => [...prev, amenity]);
     }
-  }, [searchQuery, dispatch]);
+  };
+
+  const clearFilters = () => {
+    setPriceRange(null);
+    setSelectedStar(null);
+    setSelectedAmenities([]);
+  };
+
+  const applyFilters = () => {
+    let minPrice, maxPrice;
+    if (priceRange === '₹0 - ₹1500') { minPrice = 0; maxPrice = 1500; }
+    else if (priceRange === '₹1500 - ₹3000') { minPrice = 1500; maxPrice = 3000; }
+    else if (priceRange === '₹3000+') { minPrice = 3000; }
+
+    const amenitiesStr = selectedAmenities.length > 0 ? selectedAmenities.join(',') : undefined;
+
+    performSearch({
+      minPrice,
+      maxPrice,
+      starRating: selectedStar,
+      amenities: amenitiesStr
+    });
+
+    setShowFilterModal(false);
+  };
+
+  const handleSearchSubmit = () => {
+    performSearch();
+    setShowSearchModal(false);
+  };
+
+  const openCheckIn = () => {
+    setDateModalTarget("in");
+    setCalendarBase(new Date(localCheckIn));
+    setShowDateModal(true);
+  };
+
+  const openCheckOut = () => {
+    setDateModalTarget("out");
+    setCalendarBase(new Date(localCheckOut));
+    setShowDateModal(true);
+  };
+
+  // Date Logic for Modal 
+  const getMonthMatrix = (date) => {
+    const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+    const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const startWeekday = startOfMonth.getDay();
+    const daysInMonth = endOfMonth.getDate();
+    const weeks = [];
+    let week = [];
+    const prevMonthEnd = new Date(date.getFullYear(), date.getMonth(), 0).getDate();
+    
+    for (let i = 0; i < startWeekday; i++) {
+        week.push({ day: prevMonthEnd - (startWeekday - 1 - i), inMonth: false, monthOffset: -1 });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+        week.push({ day: d, inMonth: true, monthOffset: 0 });
+        if (week.length === 7) { weeks.push(week); week = []; }
+    }
+    let nextDay = 1;
+    while (week.length < 7 && week.length > 0) {
+        week.push({ day: nextDay++, inMonth: false, monthOffset: 1 });
+    }
+    if (week.length > 0) weeks.push(week);
+    return weeks;
+  };
 
   const renderStars = (rating) => {
     const stars = [];
@@ -50,168 +169,93 @@ const Hotels = () => {
   };
 
   const HotelCard = ({ hotel }) => {
-    const [currentImageIndex, setCurrentImageIndex] = useState(0);
-    const mainImage = hotel.images?.[currentImageIndex] || hotel.images?.[0];
+    const title = hotel.hotelName || "Hotel Name";
+    const city = hotel.city || "Location";
+    const rating = hotel.rating || "4.2";
+    
+    // Price logic
     const lowestPrice = hotel.rooms?.length > 0 
       ? Math.min(...hotel.rooms.map(r => r.price))
-      : 0;
+      : 2499;
+    const originalPrice = Math.round(lowestPrice * 1.4); // Mock original price
+
+    const mainImage = hotel.images?.[0] || null;
 
     return (
       <TouchableOpacity
-        activeOpacity={0.95}
-        className="bg-white rounded-3xl mb-4 overflow-hidden shadow-lg"
-        style={{ width: CARD_WIDTH }}
+        activeOpacity={0.9}
+        onPress={() => navigation.navigate("HotelDetails", { hotelId: hotel._id })}
+        className="bg-white rounded-[16px] mb-4 overflow-hidden border border-slate-200 shadow-sm mx-4"
       >
-        {/* Image Gallery */}
-        <View className="relative">
-          <Image
-            source={{ uri: mainImage }}
-            style={{ width: CARD_WIDTH, height: 240 }}
-            resizeMode="cover"
-          />
-          
-          {/* Image indicators */}
-          {hotel.images?.length > 1 && (
-            <View className="absolute bottom-3 left-0 right-0 flex-row justify-center">
-              {hotel.images.slice(0, 5).map((_, idx) => (
-                <View
-                  key={idx}
-                  className={`h-1.5 mx-1 rounded-full ${
-                    idx === currentImageIndex
-                      ? "bg-white w-6"
-                      : "bg-white/50 w-1.5"
-                  }`}
-                />
-              ))}
+        {/* Image Section */}
+        <View className="relative h-[200px] w-full bg-slate-200">
+          {mainImage ? (
+            <Image
+              source={{ uri: mainImage }}
+              className="w-full h-full"
+              resizeMode="cover"
+            />
+          ) : (
+            <View className="w-full h-full items-center justify-center">
+              <Ionicons name="image-outline" size={40} color="#cbd5e1" />
             </View>
           )}
 
-          {/* Star Rating Badge */}
-          <View className="absolute top-3 left-3 bg-white/95 px-3 py-1.5 rounded-full flex-row items-center">
-            {renderStars(hotel.starRating)}
+          {/* Rating Badge - Top Right */}
+          <View className="absolute top-3 right-3 bg-white px-2 py-1 rounded flex-row items-center shadow-sm">
+             <Text className="text-slate-900 font-bold text-xs mr-1">{rating}</Text>
+             <Ionicons name="star" size={10} color="#16a34a" />
           </View>
 
-          {/* On Front Badge */}
-          {hotel.onFront && (
-            <View className="absolute top-3 right-3 bg-amber-400 px-3 py-1.5 rounded-full">
-              <Text className="text-xs font-bold text-slate-900">Featured</Text>
+          {/* Overlay Icons - Bottom Left */}
+          <View className="absolute bottom-3 left-3 flex-row space-x-2">
+            <View className="w-6 h-6 rounded-full bg-black/60 items-center justify-center">
+                <MaterialCommunityIcons name="wifi" size={14} color="white" />
             </View>
-          )}
-
-          {/* Image Navigation */}
-          {hotel.images?.length > 1 && (
-            <>
-              <TouchableOpacity
-                onPress={() =>
-                  setCurrentImageIndex((prev) =>
-                    prev > 0 ? prev - 1 : hotel.images.length - 1
-                  )
-                }
-                className="absolute left-2 top-1/2 -mt-5 bg-black/40 w-10 h-10 rounded-full items-center justify-center"
-              >
-                <Ionicons name="chevron-back" size={20} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() =>
-                  setCurrentImageIndex((prev) =>
-                    prev < hotel.images.length - 1 ? prev + 1 : 0
-                  )
-                }
-                className="absolute right-2 top-1/2 -mt-5 bg-black/40 w-10 h-10 rounded-full items-center justify-center"
-              >
-                <Ionicons name="chevron-forward" size={20} color="white" />
-              </TouchableOpacity>
-            </>
-          )}
+            <View className="w-6 h-6 rounded-full bg-black/60 items-center justify-center">
+                <MaterialCommunityIcons name="silverware-fork-knife" size={14} color="white" />
+            </View>
+          </View>
         </View>
 
-        {/* Hotel Info */}
-        <View className="p-4">
-          {/* Hotel Name & Location */}
-          <Text className="text-xl font-bold text-slate-900 mb-1">
-            {hotel.hotelName}
+        {/* Content Section */}
+        <View className="p-3">
+          {/* Title */}
+          <Text className="text-[17px] font-bold text-[#0f172a] mb-0.5">
+            {title}
           </Text>
-          <View className="flex-row items-center mb-3">
-            <Ionicons name="location" size={14} color="#64748b" />
-            <Text className="text-sm text-slate-600 ml-1">
-              {hotel.landmark}, {hotel.city}, {hotel.state}
-            </Text>
+          
+          {/* Location */}
+          <View className="flex-row items-center mb-2">
+            <Ionicons name="location-outline" size={14} color="#64748b" />
+            <Text className="text-sm text-slate-500 ml-1">{city}</Text>
           </View>
 
-          {/* Description */}
-          <Text className="text-sm text-slate-600 mb-3" numberOfLines={2}>
-            {hotel.description}
+          {/* Feature Badge */}
+          <Text className="text-green-600 text-[11px] font-bold uppercase tracking-wide mb-3">
+            Free Cancellation
           </Text>
 
-          {/* Amenities Preview */}
-          {hotel.amenities?.[0]?.amenities && (
-            <View className="flex-row flex-wrap mb-3">
-              {hotel.amenities[0].amenities.slice(0, 4).map((amenity, idx) => (
-                <View
-                  key={idx}
-                  className="bg-blue-50 px-2.5 py-1 rounded-full mr-2 mb-2"
-                >
-                  <Text className="text-xs text-blue-700 font-medium">
-                    {amenity}
-                  </Text>
-                </View>
-              ))}
-              {hotel.amenities[0].amenities.length > 4 && (
-                <View className="bg-slate-100 px-2.5 py-1 rounded-full">
-                  <Text className="text-xs text-slate-600 font-medium">
-                    +{hotel.amenities[0].amenities.length - 4} more
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
+          {/* Price & Action Row */}
+          <View className="flex-row items-center justify-between mt-1">
+             <View>
+                 <View className="flex-row items-baseline">
+                     <Text className="text-[20px] font-extrabold text-[#0d3b8f]">
+                        ₹{lowestPrice}
+                     </Text>
+                     <Text className="text-xs text-slate-400 font-medium line-through ml-2">
+                        ₹{originalPrice}
+                     </Text>
+                     <Text className="text-xs text-slate-500 font-medium ml-1">/ night</Text>
+                 </View>
+             </View>
 
-          {/* Property Type & Contact */}
-          <View className="flex-row items-center justify-between mb-3 pb-3 border-b border-slate-100">
-            <View className="flex-row items-center">
-              <MaterialCommunityIcons name="home-city" size={16} color="#64748b" />
-              <Text className="text-sm text-slate-600 ml-1">
-                {hotel.propertyType?.[0] || "Hotel"}
-              </Text>
-            </View>
-            <View className="flex-row items-center">
-              <Ionicons name="call" size={14} color="#2563eb" />
-              <Text className="text-sm text-blue-600 ml-1 font-medium">
-                {hotel.contact}
-              </Text>
-            </View>
+             <TouchableOpacity 
+                className="bg-[#0d3b8f] px-5 py-2 rounded-lg"
+             >
+                 <Text className="text-white font-bold text-[13px]">View</Text>
+             </TouchableOpacity>
           </View>
-
-          {/* Room Info & Price */}
-          <View className="flex-row items-center justify-between">
-            <View>
-              <Text className="text-xs text-slate-500 mb-1">Starting from</Text>
-              <View className="flex-row items-end">
-                <Text className="text-2xl font-bold text-slate-900">
-                  ₹{lowestPrice}
-                </Text>
-                <Text className="text-sm text-slate-500 ml-1 mb-1">/night</Text>
-              </View>
-              {hotel.rooms?.length > 0 && (
-                <Text className="text-xs text-green-600 font-medium">
-                  {hotel.rooms.reduce((sum, r) => sum + (r.totalRooms - r.countRooms), 0)} rooms available
-                </Text>
-              )}
-            </View>
-            <TouchableOpacity className="bg-blue-600 px-6 py-3 rounded-xl">
-              <Text className="text-white font-bold text-sm">View Details</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Review Count */}
-          {hotel.reviewCount > 0 && (
-            <View className="mt-3 pt-3 border-t border-slate-100 flex-row items-center">
-              <Ionicons name="star" size={14} color="#facc15" />
-              <Text className="text-xs text-slate-600 ml-1">
-                {hotel.reviewCount} {hotel.reviewCount === 1 ? "review" : "reviews"}
-              </Text>
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -244,35 +288,54 @@ const Hotels = () => {
     );
   }
 
+  const topPadding = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
+
   return (
-    <View className="flex-1 bg-slate-50">
-      {/* Header */}
-      <LinearGradient
-        colors={["#0052cc", "#0d3b8f"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="pt-14 pb-6 px-5"
-      >
-        <View className="flex-row items-center">
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            className="mr-3 w-10 h-10 rounded-full bg-white/20 items-center justify-center"
-          >
-            <Ionicons name="arrow-back" size={22} color="white" />
-          </TouchableOpacity>
-          <View className="flex-1">
-            <Text className="text-white text-2xl font-bold">
-              Hotels in {searchQuery}
-            </Text>
-            <Text className="text-white/80 text-sm mt-1">
-              {hotels?.length || 0} properties found
-            </Text>
+    <View className="flex-1 bg-slate-50" style={{ paddingTop: topPadding }}>
+      {/* Custom Header */}
+      <View className="bg-white px-4 py-3 flex-row items-center justify-between border-b border-slate-100">
+          <View className="flex-row items-center flex-1">
+              <TouchableOpacity onPress={() => navigation.goBack()} className="mr-3">
+                  <Ionicons name="arrow-back" size={24} color="#1e293b" />
+              </TouchableOpacity>
+              <TouchableOpacity className="flex-1" onPress={() => setShowSearchModal(true)}>
+                  <Text className="text-[17px] font-bold text-slate-900 leading-tight" numberOfLines={1}>
+                    {localCity || "Where to?"}
+                  </Text>
+                  <Text className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {display(localCheckIn)} - {display(localCheckOut)} • {localGuests} Guest{localGuests > 1 ? 's' : ''}
+                  </Text>
+              </TouchableOpacity>
           </View>
-          <TouchableOpacity className="w-10 h-10 rounded-full bg-white/20 items-center justify-center">
-            <Ionicons name="options" size={22} color="white" />
+          <TouchableOpacity onPress={() => setShowSearchModal(true)}>
+             <Ionicons name="create-outline" size={24} color="#475569" />
           </TouchableOpacity>
-        </View>
-      </LinearGradient>
+      </View>
+
+      {/* Filter Chips */}
+      <View className="bg-white pb-3 pt-2">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
+              <TouchableOpacity 
+                onPress={() => setShowFilterModal(true)}
+                className="flex-row items-center border border-slate-300 rounded-full px-3 py-1.5 mr-2 bg-slate-50"
+              >
+                  <Ionicons name="options-outline" size={16} color="#0f172a" style={{ marginRight: 6}} />
+                  <Text className="text-xs font-bold text-slate-900">Filters</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
+                  <Text className="text-xs font-medium text-slate-600">Price: Low to High</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
+                  <Text className="text-xs font-medium text-slate-600">4★ & above</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
+                   <Text className="text-xs font-medium text-slate-600">Near Me</Text>
+              </TouchableOpacity>
+          </ScrollView>
+      </View>
 
       {/* Hotels List */}
       {hotels?.length === 0 ? (
@@ -296,10 +359,313 @@ const Hotels = () => {
           data={hotels}
           renderItem={({ item }) => <HotelCard hotel={item} />}
           keyExtractor={(item) => item._id}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-end">
+          <View className="bg-white rounded-t-3xl h-[85%] w-full">
+            {/* Modal Header */}
+            <View className="flex-row items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
+              <Text className="text-xl font-extrabold text-slate-900">Filters</Text>
+              <TouchableOpacity 
+                onPress={() => setShowFilterModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center"
+              >
+                <Ionicons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView className="flex-1 px-5 pt-2" showsVerticalScrollIndicator={false}>
+              
+              {/* Price Range */}
+              <View className="mt-4">
+                <Text className="text-sm font-bold text-slate-900 mb-3">Price Range (Per Night)</Text>
+                <View className="flex-row flex-wrap gap-3">
+                  {['₹0 - ₹1500', '₹1500 - ₹3000', '₹3000+'].map((range, idx) => {
+                     const isSelected = priceRange === range;
+                     return (
+                      <TouchableOpacity
+                        key={idx}
+                        onPress={() => setPriceRange(isSelected ? null : range)}
+                        className={`px-4 py-2.5 rounded-xl border ${
+                          isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <Text className={`text-xs font-bold ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                          {range}
+                        </Text>
+                      </TouchableOpacity>
+                     );
+                  })}
+                </View>
+              </View>
+
+              {/* Star Rating */}
+              <View className="mt-8">
+                <Text className="text-sm font-bold text-slate-900 mb-3">Star Rating</Text>
+                <View className="flex-row gap-3">
+                  {[3, 4, 5].map((star) => {
+                    const isSelected = selectedStar === star;
+                    return (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => setSelectedStar(isSelected ? null : star)}
+                        className={`flex-1 py-3 rounded-xl border items-center justify-center ${
+                          isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <Text className={`text-sm font-bold ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                          {star} ★
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Amenities */}
+              <View className="mt-8 mb-10">
+                <Text className="text-sm font-bold text-slate-900 mb-3">Amenities</Text>
+                <View className="flex-row flex-wrap gap-3">
+                  {[
+                    { label: 'Free Wifi', icon: 'wifi' },
+                    { label: 'AC', icon: 'air-conditioner' }, // material: hvac? using general for now
+                    { label: 'Pool', icon: 'pool' },
+                    { label: 'Breakfast', icon: 'coffee-outline', font: 'Ionicons' }, // custom logic for icon set
+                    { label: 'TV', icon: 'television' },
+                  ].map((item, idx) => {
+                    const isSelected = selectedAmenities.includes(item.label);
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        onPress={() => toggleAmenity(item.label)}
+                        className={`w-[30%] py-4 rounded-xl border items-center justify-center ${
+                          isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
+                        }`}
+                      > 
+                        {item.font === 'Ionicons' ? (
+                           <Ionicons name={item.icon} size={20} color={isSelected ? '#2563eb' : '#64748b'} />
+                        ) : (
+                           <MaterialCommunityIcons name={item.icon} size={20} color={isSelected ? '#2563eb' : '#64748b'} />
+                        )}
+                        <Text className={`text-xs font-semibold mt-2 ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+            </ScrollView>
+
+            {/* Footer Buttons */}
+            <View className="p-5 border-t border-slate-100 flex-row items-center gap-4 bg-white pb-8">
+              <TouchableOpacity 
+                onPress={clearFilters}
+                className="flex-1 py-3.5 items-center justify-center"
+              >
+                <Text className="text-slate-600 font-bold text-base">Clear All</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                onPress={applyFilters}
+                className="flex-2 w-[60%] py-3.5 bg-[#0d3b8f] rounded-xl items-center justify-center shadow-lg shadow-blue-900/20"
+              >
+                <Text className="text-white font-bold text-base">Apply Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- Search Modification Modal --- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showSearchModal}
+        onRequestClose={() => setShowSearchModal(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-end">
+            <View className="bg-white rounded-t-[24px] h-[85%]">
+                {/* Modal Header */}
+                <View className="flex-row items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
+                    <Text className="text-xl font-bold text-slate-900">Modify Search</Text>
+                    <TouchableOpacity onPress={() => setShowSearchModal(false)} className="bg-slate-100 p-2 rounded-full">
+                        <Ionicons name="close" size={20} color="#64748b" />
+                    </TouchableOpacity>
+                </View>
+                
+                <ScrollView className="p-6">
+                    {/* Destination Input */}
+                    <View className="mb-6">
+                        <Text className="text-sm font-bold text-slate-700 mb-2 ml-1">Destination</Text>
+                        <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5">
+                            <Ionicons name="location-sharp" size={20} color="#ef4444" />
+                            <TextInput 
+                                className="flex-1 ml-3 text-base text-slate-900 font-semibold"
+                                placeholder="Where are you going?"
+                                value={localCity}
+                                onChangeText={setLocalCity}
+                            />
+                        </View>
+                    </View>
+
+                    {/* Dates Row */}
+                    <View className="flex-row gap-4 mb-6">
+                        <TouchableOpacity onPress={openCheckIn} className="flex-1">
+                            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1">Check-in</Text>
+                            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5">
+                                <Ionicons name="calendar-outline" size={18} color="#2563eb" />
+                                <Text className="ml-2 text-base font-semibold text-slate-900">
+                                    {display(localCheckIn)}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity onPress={openCheckOut} className="flex-1">
+                            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1">Check-out</Text>
+                            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5">
+                                <Ionicons name="calendar-outline" size={18} color="#2563eb" />
+                                <Text className="ml-2 text-base font-semibold text-slate-900">
+                                    {display(localCheckOut)}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Guests & Rooms */}
+                    <View className="flex-row gap-4 mb-8">
+                         <View className="flex-1">
+                             <Text className="text-sm font-bold text-slate-700 mb-2 ml-1">Guests</Text>
+                             <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 justify-between">
+                                 <TouchableOpacity 
+                                     onPress={() => setLocalGuests(Math.max(1, localGuests - 1))}
+                                     className="w-8 h-8 bg-white border border-slate-200 rounded-lg items-center justify-center shadow-sm"
+                                 >
+                                     <Ionicons name="remove" size={16} color="#0f172a" />
+                                 </TouchableOpacity>
+                                 <Text className="text-base font-bold text-slate-900">{localGuests}</Text>
+                                 <TouchableOpacity 
+                                     onPress={() => setLocalGuests(localGuests + 1)}
+                                     className="w-8 h-8 bg-white border border-slate-200 rounded-lg items-center justify-center shadow-sm"
+                                 >
+                                     <Ionicons name="add" size={16} color="#0f172a" />
+                                 </TouchableOpacity>
+                             </View>
+                         </View>
+                         <View className="flex-1">
+                             <Text className="text-sm font-bold text-slate-700 mb-2 ml-1">Rooms</Text>
+                             <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 justify-between">
+                                 <TouchableOpacity 
+                                     onPress={() => setLocalRooms(Math.max(1, localRooms - 1))}
+                                     className="w-8 h-8 bg-white border border-slate-200 rounded-lg items-center justify-center shadow-sm"
+                                 >
+                                     <Ionicons name="remove" size={16} color="#0f172a" />
+                                 </TouchableOpacity>
+                                 <Text className="text-base font-bold text-slate-900">{localRooms}</Text>
+                                 <TouchableOpacity 
+                                     onPress={() => setLocalRooms(localRooms + 1)}
+                                     className="w-8 h-8 bg-white border border-slate-200 rounded-lg items-center justify-center shadow-sm"
+                                 >
+                                     <Ionicons name="add" size={16} color="#0f172a" />
+                                 </TouchableOpacity>
+                             </View>
+                         </View>
+                    </View>
+                </ScrollView>
+
+                {/* Footer Action */}
+                <View className="p-5 border-t border-slate-100 bg-white shadow-lg">
+                    <TouchableOpacity 
+                        onPress={handleSearchSubmit}
+                        className="bg-[#0d3b8f] py-4 rounded-xl flex-row justify-center items-center shadow-blue-900/20 shadow-xl"
+                    >
+                        <Ionicons name="search" size={20} color="white" className="mr-2" />
+                        <Text className="text-white font-bold text-lg ml-2">Search Hotels</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </View>
+      </Modal>
+
+      {/* --- Date Picker Modal --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showDateModal}
+        onRequestClose={() => setShowDateModal(false)}
+      >
+        <View className="flex-1 bg-black/60 justify-center items-center px-6">
+            <View className="bg-white w-full rounded-2xl p-4 shadow-2xl">
+                <View className="flex-row justify-between items-center mb-4 pb-4 border-b border-slate-100">
+                    <Text className="text-lg font-bold text-slate-800">
+                       Select {dateModalTarget === "in" ? "Check-in" : "Check-out"} Date
+                    </Text>
+                    <TouchableOpacity onPress={() => setShowDateModal(false)}>
+                        <Ionicons name="close-circle" size={24} color="#94a3b8" />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Month Navigator */}
+                <View className="flex-row justify-between items-center mb-4 px-2">
+                    <TouchableOpacity onPress={() => setCalendarBase(new Date(calendarBase.setMonth(calendarBase.getMonth() - 1)))}>
+                        <Ionicons name="chevron-back" size={24} color="#334155" />
+                    </TouchableOpacity>
+                    <Text className="text-base font-bold text-slate-700">
+                        {calendarBase.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </Text>
+                    <TouchableOpacity onPress={() => setCalendarBase(new Date(calendarBase.setMonth(calendarBase.getMonth() + 1)))}>
+                        <Ionicons name="chevron-forward" size={24} color="#334155" />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Calendar Grid */}
+                <View className="mb-2">
+                    <View className="flex-row justify-between mb-2">
+                         {['S','M','T','W','T','F','S'].map((d, i) => (
+                             <Text key={i} className="text-slate-400 font-bold w-[13%] text-center text-xs">{d}</Text>
+                         ))}
+                    </View>
+                    {getMonthMatrix(calendarBase).map((week, wIdx) => (
+                        <View key={wIdx} className="flex-row justify-between mb-2">
+                            {week.map((dayObj, dIdx) => {
+                                const dateStr = `${calendarBase.getFullYear()}-${String(calendarBase.getMonth() + 1 + dayObj.monthOffset).padStart(2, '0')}-${String(dayObj.day).padStart(2, '0')}`;
+                                const isSelected = dateStr === (dateModalTarget === "in" ? localCheckIn : localCheckOut);
+                                
+                                return (
+                                    <TouchableOpacity 
+                                       key={dIdx} 
+                                       disabled={!dayObj.inMonth}
+                                       onPress={() => {
+                                           if (dateModalTarget === "in") setLocalCheckIn(dateStr);
+                                           else setLocalCheckOut(dateStr);
+                                           setShowDateModal(false);
+                                       }}
+                                       className={`w-[13%] aspect-square items-center justify-center rounded-full ${isSelected ? 'bg-blue-600' : ''}`}
+                                    >
+                                        <Text className={`${!dayObj.inMonth ? 'text-transparent' : isSelected ? 'text-white font-bold' : 'text-slate-700 font-medium'}`}>
+                                            {dayObj.day}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    ))}
+                </View>
+            </View>
+        </View>
+      </Modal>
+
     </View>
   );
 };

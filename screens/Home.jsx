@@ -1,0 +1,280 @@
+import React, { useEffect, useState } from "react";
+import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, StatusBar } from "react-native";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchLocation } from "../store/slices/locationSlice";
+import { searchHotel } from "../store/slices/hotelSlice";
+import { useNavigation } from "@react-navigation/native";
+import Header from "../components/Header";
+import SearchCard from "../components/SearchCard";
+import PopularDestinations from "../components/PopularDestinations";
+import HomeScreenFrontHotels from "./HomeScreenFrontHotels";
+
+const Home = () => {
+  // --- State Management ---
+  const [searchCity, setSearchCity] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [countRooms, setCountRooms] = useState(1);
+  const [guests, setGuests] = useState(2);
+
+  // --- Date Logic ---
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  // Helper: Format Date to YYYY-MM-DD
+  const iso = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Helper: Display Date (e.g., "10 Feb")
+  const display = (d) =>
+    d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+
+  const [checkInDate, setCheckInDate] = useState(iso(today));
+  const [checkOutDate, setCheckOutDate] = useState(iso(tomorrow));
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [dateModalTarget, setDateModalTarget] = useState("in"); // 'in' or 'out'
+  const [calendarBase, setCalendarBase] = useState(new Date(checkInDate));
+
+  const checkInDateDisplay = display(new Date(checkInDate));
+  const checkOutDateDisplay = display(new Date(checkOutDate));
+
+  // --- Redux & Navigation ---
+  const dispatch = useDispatch();
+  const navigation = useNavigation();
+  const { data: locations } = useSelector((state) => state.location);
+
+  useEffect(() => {
+    dispatch(fetchLocation());
+  }, [dispatch]);
+
+  // --- Calendar Matrix Generator ---
+  const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+  const endOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
+  const getMonthMatrix = (date) => {
+    const first = startOfMonth(date);
+    const last = endOfMonth(date);
+    const startWeekday = first.getDay();
+    const daysInMonth = last.getDate();
+    const weeks = [];
+    let week = [];
+
+    const prevMonthEnd = new Date(date.getFullYear(), date.getMonth(), 0).getDate();
+    for (let i = 0; i < startWeekday; i++) {
+      const dayNum = prevMonthEnd - (startWeekday - 1 - i);
+      week.push({ day: dayNum, inMonth: false, monthOffset: -1 });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      week.push({ day: d, inMonth: true, monthOffset: 0 });
+      if (week.length === 7) {
+        weeks.push(week);
+        week = [];
+      }
+    }
+    let nextDay = 1;
+    while (week.length < 7) {
+      week.push({ day: nextDay++, inMonth: false, monthOffset: 1 });
+    }
+    weeks.push(week);
+    return weeks;
+  };
+
+  // --- Handlers ---
+  const handleSelect = async (title) => {
+    try {
+      setSearchCity(title);
+      setIsSearching(true);
+      await dispatch(
+        searchHotel({ city: title, checkInDate, checkOutDate, countRooms, guests })
+      ).unwrap();
+      navigation.navigate("Hotels", { searchQuery: title });
+    } catch (err) {
+      Alert.alert("Search failed", err?.toString());
+      navigation.navigate("Hotels", { searchQuery: title });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchCity || searchCity.trim() === "") {
+      Alert.alert("Enter Location", "Please enter a city or location.");
+      return;
+    }
+    const city = searchCity.trim();
+    try {
+      setIsSearching(true);
+      await dispatch(
+        searchHotel({ city, checkInDate, checkOutDate, countRooms, guests })
+      ).unwrap();
+      navigation.navigate("Hotels", { 
+        searchQuery: city,
+        checkInDate,
+        checkOutDate,
+        guests,
+        countRooms
+      });
+    } catch (err) {
+      Alert.alert("Search failed", err?.toString());
+      navigation.navigate("Hotels", { 
+        searchQuery: city,
+        checkInDate,
+        checkOutDate,
+        guests,
+        countRooms
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const openCheckIn = () => {
+    setDateModalTarget("in");
+    setCalendarBase(new Date(checkInDate));
+    setShowDateModal(true);
+  };
+
+  const openCheckOut = () => {
+    setDateModalTarget("out");
+    setCalendarBase(new Date(checkOutDate));
+    setShowDateModal(true);
+  };
+
+  // --- Main Render ---
+  return (
+    <View className="flex-1 bg-slate-50">
+      <StatusBar barStyle="light-content" backgroundColor="#0d3b8f" />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        <Header />
+        <SearchCard
+          searchCity={searchCity}
+          setSearchCity={setSearchCity}
+          checkInDateDisplay={checkInDateDisplay}
+          checkOutDateDisplay={checkOutDateDisplay}
+          onOpenCheckIn={openCheckIn}
+          onOpenCheckOut={openCheckOut}
+          guests={guests}
+          setGuests={setGuests}
+          rooms={countRooms}
+          setRooms={setCountRooms}
+          isSearching={isSearching}
+          onSearch={handleSearch}
+        />
+
+        <PopularDestinations locations={locations} onSelectLocation={handleSelect} />
+        <HomeScreenFrontHotels />
+      </ScrollView>
+      <Modal visible={showDateModal} transparent animationType="fade">
+        <View className="flex-1 bg-black/60 justify-center items-center px-4">
+          <View className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl">
+            <View className="flex-row justify-between items-center mb-4">
+              <View>
+                <Text className="text-lg font-bold text-slate-900">
+                  Select {dateModalTarget === "in" ? "Check-in" : "Check-out"}
+                </Text>
+                <Text className="text-xs text-slate-500">
+                  {calendarBase.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+                </Text>
+              </View>
+              <View className="flex-row space-x-2 bg-slate-50 rounded-full p-1 border border-slate-100">
+                <TouchableOpacity
+                  onPress={() => setCalendarBase((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
+                  className="w-8 h-8 items-center justify-center bg-white rounded-full shadow-sm"
+                >
+                  <Text className="font-bold text-slate-700">{"<"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setCalendarBase((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
+                  className="w-8 h-8 items-center justify-center bg-white rounded-full shadow-sm"
+                >
+                  <Text className="font-bold text-slate-700">{">"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View className="flex-row justify-between mb-2">
+              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((w) => (
+                <Text key={w} className="text-xs font-bold text-slate-400 text-center w-10">
+                  {w}
+                </Text>
+              ))}
+            </View>
+
+            <View>
+              {getMonthMatrix(calendarBase).map((week, wi) => (
+                <View key={wi} className="flex-row justify-between mb-2">
+                  {week.map((cell, ci) => {
+                    const month = calendarBase.getMonth() + (cell.monthOffset || 0);
+                    let year = calendarBase.getFullYear();
+                    if (month < 0) year--;
+                    if (month > 11) year++;
+                    const cellDate = new Date(year, (month + 12) % 12, cell.day);
+                    const cellISO = iso(cellDate);
+
+                    const isStart = cellISO === checkInDate;
+                    const isEnd = cellISO === checkOutDate;
+                    const inRange =
+                      new Date(cellISO) > new Date(checkInDate) &&
+                      new Date(cellISO) < new Date(checkOutDate);
+
+                    const handlePress = () => {
+                      if (dateModalTarget === "in") {
+                        setCheckInDate(cellISO);
+                        if (new Date(checkOutDate) <= new Date(cellISO)) {
+                          const next = new Date(cellDate);
+                          next.setDate(next.getDate() + 1);
+                          setCheckOutDate(iso(next));
+                        }
+                      } else {
+                        if (new Date(cellISO) <= new Date(checkInDate)) return;
+                        setCheckOutDate(cellISO);
+                      }
+                    };
+
+                    return (
+                      <TouchableOpacity
+                        key={ci}
+                        disabled={!cell.inMonth}
+                        onPress={handlePress}
+                        className={`w-10 h-10 items-center justify-center rounded-full
+                          ${!cell.inMonth ? "opacity-0" : "opacity-100"}
+                          ${(isStart || isEnd) ? "bg-[#0d3b8f]" : inRange ? "bg-blue-100" : "bg-transparent"}
+                        `}
+                      >
+                        <Text
+                          className={`text-sm font-medium ${
+                            isStart || isEnd ? "text-white" : inRange ? "text-blue-800" : "text-slate-800"
+                          }`}
+                        >
+                          {cell.day}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              className="mt-5 bg-[#0d3b8f] py-3.5 rounded-2xl items-center shadow-lg shadow-blue-900/20"
+              onPress={() => setShowDateModal(false)}
+            >
+              <Text className="text-white font-bold tracking-wide">Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
+
+export default Home;

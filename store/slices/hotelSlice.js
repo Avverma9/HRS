@@ -19,7 +19,6 @@ export const searchHotel = createAsyncThunk(
       qs = qs.replace(/\+/g, "%20");
       if (!qs) return { data: [] };
       const response = await api.get(`/hotels/filters?${qs}`);
-      console.log('searchHotel response:', response.data);
       return response.data;
     } catch (error) {
       // Extract the error message from the error object
@@ -28,16 +27,34 @@ export const searchHotel = createAsyncThunk(
   }
 );
 
+
+export const frontHotels = createAsyncThunk(
+  "hotel/frontHotels",
+  async (_, { rejectWithValue }) => { 
+    try {
+      const response = await api.get("/get/offers/main/hotels");
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);  
+  
 // Create the slice
 const hotelSlice = createSlice({
   name: "hotel",
   initialState: {
-    data: [],
+    data: [], // For search results
     loading: false,
     error: null,
+    // Separate state for featured/front hotels
+    featuredData: [],
+    featuredLoading: false,
+    featuredError: null,
   },
   extraReducers: (builder) => {
     builder
+      // --- Search Hotels Cases ---
       .addCase(searchHotel.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -50,6 +67,20 @@ const hotelSlice = createSlice({
       .addCase(searchHotel.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      
+      // --- Featured/Front Hotels Cases ---
+      .addCase(frontHotels.pending, (state) => {
+        state.featuredLoading = true;
+        state.featuredError = null;
+      })
+      .addCase(frontHotels.fulfilled, (state, action) => {
+        state.featuredLoading = false;
+        state.featuredData = action.payload?.data || action.payload || [];
+      })
+      .addCase(frontHotels.rejected, (state, action) => {
+        state.featuredLoading = false;
+        state.featuredError = action.payload;
       });
   },
 });
