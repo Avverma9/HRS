@@ -1,5 +1,4 @@
 import './global.css';
-import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { navigationRef } from './utils/navigation';
