@@ -326,23 +326,19 @@ const HotelDetails = ({ navigation, route }) => {
     const relevantOverrides = data.filter((entry) => {
       const entryRoomId = entry?.roomId ?? entry?._id ?? entry?.id;
       if (!entryRoomId || String(entryRoomId) !== String(roomId)) return false;
-      if (!entry?.startDate || !entry?.endDate) return false;
       return true;
     });
 
     if (!relevantOverrides.length) return null;
 
-    // We check IF the booking range falls *within* or *overlaps* the special pricing window.
-    // The user requirement: "is date range me price 4000 hai" => if we book within this range, price is 4000.
-    // Given the data is often specific days (Jan 1 to Jan 2), if our checkIn hits this, we use it.
-    // Priority: Find an override that covers the checkIn date.
+    const bookingStart = toDateOnly(new Date(inDate));
+    const bookingEnd = toDateOnly(new Date(outDate));
+
+    // If date range is provided, apply when booking overlaps that window.
+    // If dates are missing, treat as always applicable for that room.
     const validOverride = relevantOverrides.find((entry) => {
-       const start = new Date(entry.startDate).getTime();
-       const end = new Date(entry.endDate).getTime();
-       const checkIn = toDateOnly(inDate).getTime();
-       
-       // Simple logic: If check-in date is within the special price window [start, end]
-       return checkIn >= start && checkIn <= end;
+      if (!entry?.startDate || !entry?.endDate) return true;
+      return dateRangesOverlap(bookingStart, bookingEnd, entry.startDate, entry.endDate);
     });
 
     return validOverride || null;
@@ -374,6 +370,17 @@ const HotelDetails = ({ navigation, route }) => {
   const gstConfig = hotel?.gstConfig || null;
   const amenities = hotel?.amenities || [];
   const foods = useMemo(() => extractFoods(hotel), [hotel]);
+
+  const monthlyDataSource = useMemo(() => {
+    if (Array.isArray(monthlyData) && monthlyData.length) return monthlyData;
+    if (Array.isArray(hotel?.monthlyData) && hotel.monthlyData.length) return hotel.monthlyData;
+    if (Array.isArray(hotel?.monthlyPrices) && hotel.monthlyPrices.length) return hotel.monthlyPrices;
+    if (Array.isArray(hotel?.monthlyRoomPrices) && hotel.monthlyRoomPrices.length)
+      return hotel.monthlyRoomPrices;
+    if (Array.isArray(hotel?.monthlyPricing) && hotel.monthlyPricing.length)
+      return hotel.monthlyPricing;
+    return [];
+  }, [monthlyData, hotel]);
 
   const formatPolicyValue = (key, value) => {
     if (value === undefined || value === null || value === "") return null;
@@ -430,7 +437,12 @@ const HotelDetails = ({ navigation, route }) => {
     const rooms = Array.isArray(hotel?.rooms) ? hotel.rooms : [];
     return rooms.map((room) => {
       const roomId = getRoomId(room);
-      const monthlyOverride = pickMonthlyOverride(monthlyData, roomId, checkInDate, checkOutDate);
+      const monthlyOverride = pickMonthlyOverride(
+        monthlyDataSource,
+        roomId,
+        checkInDate,
+        checkOutDate
+      );
 
       const basePrice = getRoomBasePrice(room);
       const overridePrice = parseNumber(monthlyOverride?.monthPrice);
@@ -448,7 +460,15 @@ const HotelDetails = ({ navigation, route }) => {
         },
       };
     });
-  }, [hotel, monthlyData, checkInDate, checkOutDate, getRoomId, getRoomBasePrice, pickMonthlyOverride]);
+  }, [
+    hotel,
+    monthlyDataSource,
+    checkInDate,
+    checkOutDate,
+    getRoomId,
+    getRoomBasePrice,
+    pickMonthlyOverride,
+  ]);
 
   useEffect(() => {
     if (!roomsWithPricing.length) return;
@@ -492,12 +512,17 @@ const HotelDetails = ({ navigation, route }) => {
     const roomTaxPercent = parseNumber(
       selectedRoomData?.pricing?.taxPercent || selectedRoomData?.pricing?.gstPercent
     );
+    const isMonthlyOverrideApplied = !!selectedRoomData?.__pricing?.isOverrideApplied;
 
     let gstTotal = 0;
     let appliedTaxPercent = 0;
     let taxLabel = "";
 
-    if (gstData?.gstPrice) {
+    if (isMonthlyOverrideApplied) {
+      appliedTaxPercent = 12;
+      gstTotal = (baseTotal * appliedTaxPercent) / 100;
+      taxLabel = "GST (12%)";
+    } else if (gstData?.gstPrice) {
       appliedTaxPercent = parseNumber(gstData.gstPrice);
       gstTotal = (baseTotal * appliedTaxPercent) / 100;
       taxLabel = `GST (${appliedTaxPercent}%)`;
@@ -1009,6 +1034,8 @@ const HotelDetails = ({ navigation, route }) => {
               );
               const taxDisplay = roomTaxPercent
                 ? `${roomTaxPercent}%`
+                : room?.__pricing?.isOverrideApplied
+                ? "12%"
                 : pricing.appliedTaxPercent
                 ? `${pricing.appliedTaxPercent}%`
                 : "12%";
