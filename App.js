@@ -18,7 +18,6 @@ import LoginPage from './screens/LoginRN';
 import RegisterPage from './screens/Register';
 import Home from './screens/Home';
 import Cabs from './screens/Cabs';
-import Holidays from './screens/Holidays';
 import Tour from './screens/Tour';
 import Hotels from './screens/Hotels';
 import HotelDetails from './screens/HotelDetails';
@@ -171,7 +170,6 @@ function RootNavigator() {
         <>
           <Stack.Screen name="Login" component={LoginPage} />
           <Stack.Screen name="Register" component={RegisterPage} />
-          <Stack.Screen name="MainTabs" component={TabNavigator} />
         </>
       )}
     </Stack.Navigator>

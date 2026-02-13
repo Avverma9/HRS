@@ -65,6 +65,12 @@ const parseNumber = (v) => {
   return 0;
 };
 
+const toList = (value) => {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  return [value];
+};
+
 const toDateOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
 const formatShortDate = (d) => {
@@ -296,6 +302,9 @@ const HotelDetails = ({ navigation, route }) => {
   const [showAllAmenities, setShowAllAmenities] = useState(false);
   const [showPoliciesModal, setShowPoliciesModal] = useState(false);
   const [couponCodeInput, setCouponCodeInput] = useState("");
+  const [galleryModalVisible, setGalleryModalVisible] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const galleryScrollRef = useRef(null);
 
   useEffect(() => {
     if (!hotelId) return;
@@ -451,8 +460,39 @@ const HotelDetails = ({ navigation, route }) => {
     return baseItems;
   }, [policies]);
 
-  const mainImage = basicInfo?.images?.[0];
-  const otherImages = basicInfo?.images?.slice(1, 9) || [];
+  const galleryImages = useMemo(() => toList(basicInfo?.images).filter(Boolean), [basicInfo?.images]);
+  const mainImage = galleryImages[0];
+  const otherImages = galleryImages.slice(1, 9);
+
+  const openGalleryAt = useCallback(
+    (index) => {
+      if (!galleryImages.length) return;
+      const safeIndex = clamp(index, 0, galleryImages.length - 1);
+      setGalleryIndex(safeIndex);
+      setGalleryModalVisible(true);
+    },
+    [galleryImages]
+  );
+
+  const screenWidth = Dimensions.get("window").width;
+
+  const goToGalleryIndex = useCallback(
+    (index, animated = true) => {
+      if (!galleryImages.length) return;
+      const safeIndex = clamp(index, 0, galleryImages.length - 1);
+      setGalleryIndex(safeIndex);
+      galleryScrollRef.current?.scrollTo({ x: safeIndex * screenWidth, y: 0, animated });
+    },
+    [galleryImages.length, screenWidth]
+  );
+
+  useEffect(() => {
+    if (!galleryModalVisible) return;
+    const rafId = requestAnimationFrame(() => {
+      galleryScrollRef.current?.scrollTo({ x: galleryIndex * screenWidth, y: 0, animated: false });
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [galleryModalVisible, galleryIndex, screenWidth]);
 
   const roomsWithPricing = useMemo(() => {
     const rooms = Array.isArray(hotel?.rooms) ? hotel.rooms : [];
@@ -818,14 +858,8 @@ const HotelDetails = ({ navigation, route }) => {
         basicInfo?.ownerName || hotel?.hotelOwnerName || hotel?.createdBy?.user || "",
     };
 
-    console.log('Booking payload:', payload);
+  
     dispatch(createBooking(payload))
-      .then((result) => {
-        console.log('Booking response:', result);
-      })
-      .catch((err) => {
-        console.log('Booking error:', err);
-      });
   };
 
   const handleGoBack = () => {
@@ -937,7 +971,9 @@ const HotelDetails = ({ navigation, route }) => {
         <View className="relative">
           <View className="h-80">
             {mainImage ? (
-              <Image source={{ uri: mainImage }} className="w-full h-full" resizeMode="cover" />
+              <TouchableOpacity activeOpacity={0.95} onPress={() => openGalleryAt(0)}>
+                <Image source={{ uri: mainImage }} className="w-full h-full" resizeMode="cover" />
+              </TouchableOpacity>
             ) : (
               <View className="w-full h-full bg-slate-200 items-center justify-center">
                 <Ionicons name="image-outline" size={40} color="#94a3b8" />
@@ -973,11 +1009,12 @@ const HotelDetails = ({ navigation, route }) => {
               contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
             >
               {otherImages.map((img, idx) => (
-                <Image
-                  key={`${img}-${idx}`}
-                  source={{ uri: img }}
-                  className="w-16 h-16 rounded-2xl border border-white/40"
-                />
+                <TouchableOpacity key={`${img}-${idx}`} activeOpacity={0.9} onPress={() => openGalleryAt(idx + 1)}>
+                  <Image
+                    source={{ uri: img }}
+                    className="w-16 h-16 rounded-2xl border border-white/40"
+                  />
+                </TouchableOpacity>
               ))}
             </ScrollView>
           )}
@@ -1505,6 +1542,65 @@ const HotelDetails = ({ navigation, route }) => {
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={galleryModalVisible}
+        onRequestClose={() => setGalleryModalVisible(false)}
+      >
+        <View className="flex-1 bg-black">
+          <View
+            className="absolute left-0 right-0 z-10 flex-row items-center justify-between px-4"
+            style={{ top: 12 + topPadding }}
+          >
+            <TouchableOpacity
+              onPress={() => setGalleryModalVisible(false)}
+              className="w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/20"
+            >
+              <Ionicons name="close" size={22} color="white" />
+            </TouchableOpacity>
+            <Text className="text-white text-xs font-bold bg-black/40 px-3 py-1.5 rounded-full">
+              {galleryImages.length ? `${galleryIndex + 1} / ${galleryImages.length}` : "0 / 0"}
+            </Text>
+          </View>
+
+          <ScrollView
+            ref={galleryScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            className="flex-1"
+            onMomentumScrollEnd={(event) => {
+              const nextIndex = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+              setGalleryIndex(clamp(nextIndex, 0, Math.max(galleryImages.length - 1, 0)));
+            }}
+          >
+            {galleryImages.map((img, idx) => (
+              <View key={`${img}-${idx}`} style={{ width: screenWidth }} className="flex-1 items-center justify-center px-2">
+                <Image source={{ uri: img }} className="w-full h-[75%]" resizeMode="contain" />
+              </View>
+            ))}
+          </ScrollView>
+
+          {galleryImages.length > 1 && (
+            <View className="absolute bottom-10 left-0 right-0 px-8 flex-row items-center justify-between">
+              <TouchableOpacity
+                onPress={() => goToGalleryIndex(galleryIndex > 0 ? galleryIndex - 1 : galleryImages.length - 1)}
+                className="w-11 h-11 rounded-full bg-black/40 items-center justify-center border border-white/20"
+              >
+                <Ionicons name="chevron-back" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => goToGalleryIndex(galleryIndex < galleryImages.length - 1 ? galleryIndex + 1 : 0)}
+                className="w-11 h-11 rounded-full bg-black/40 items-center justify-center border border-white/20"
+              >
+                <Ionicons name="chevron-forward" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
 
       <Modal
         animationType="slide"
