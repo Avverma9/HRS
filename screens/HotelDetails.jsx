@@ -17,7 +17,6 @@ import {
   Dimensions,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -281,6 +280,7 @@ const HotelDetails = ({ navigation, route }) => {
 
   const [guestsCount, setGuestsCount] = useState(initialGuestsCount);
   const [roomsCount, setRoomsCount] = useState(initialRoomsCount);
+  // Always select the first available room by default
   const [selectedRoomId, setSelectedRoomId] = useState(null);
 
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
@@ -491,11 +491,13 @@ const HotelDetails = ({ navigation, route }) => {
     pickMonthlyOverride,
   ]);
 
+  // Always select the first available room if none is selected or if the selected room is no longer available
   useEffect(() => {
     if (!roomsWithPricing.length) return;
-    if (selectedRoomId) return;
     const available = roomsWithPricing.find((r) => !isRoomSoldOut(r) && getRoomId(r));
-    if (available) setSelectedRoomId(getRoomId(available));
+    if (!selectedRoomId || !roomsWithPricing.some(r => String(getRoomId(r)) === String(selectedRoomId) && !isRoomSoldOut(r))) {
+      if (available) setSelectedRoomId(getRoomId(available));
+    }
   }, [roomsWithPricing, selectedRoomId, getRoomId, isRoomSoldOut]);
 
   useEffect(() => {
@@ -669,7 +671,6 @@ const HotelDetails = ({ navigation, route }) => {
 
   const handleBookNow = () => {
     if (!selectedRoomId) {
-      Toast.show({ type: "error", text1: "Please select a room" });
       return;
     }
     setBookingModalVisible(true);
@@ -714,17 +715,14 @@ const HotelDetails = ({ navigation, route }) => {
   const handleApplyCoupon = async () => {
     const code = String(couponCodeInput || "").trim().toUpperCase();
     if (!code) {
-      Toast.show({ type: "error", text1: "Enter coupon code first" });
       return;
     }
     if (!hotelId || !selectedRoomId) {
-      Toast.show({ type: "error", text1: "Please select an available room first" });
       return;
     }
 
     const userId = await getUserId();
     if (!userId) {
-      Toast.show({ type: "error", text1: "Please login to apply coupon" });
       return;
     }
 

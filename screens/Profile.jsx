@@ -16,7 +16,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import * as ImagePicker from "expo-image-picker";
-import Toast from "react-native-toast-message";
 
 import { useAuth } from "../contexts/AuthContext";
 import Header from "../components/Header";
@@ -313,10 +312,6 @@ const Profile = ({ navigation }) => {
 
   useEffect(() => {
     if (profileUpdateState?.status === "succeeded") {
-      Toast.show({
-        type: "success",
-        text1: profileUpdateState?.message || "Profile updated successfully",
-      });
       dispatch(fetchProfileData());
       setShowUpdateModal(false);
       setSelectedImages([]);
@@ -325,10 +320,6 @@ const Profile = ({ navigation }) => {
     }
 
     if (profileUpdateState?.status === "failed" && profileUpdateState?.error) {
-      Toast.show({
-        type: "error",
-        text1: String(profileUpdateState?.error?.message || profileUpdateState?.error),
-      });
     }
   }, [dispatch, profileUpdateState?.error, profileUpdateState?.message, profileUpdateState?.status]);
 
@@ -382,7 +373,6 @@ const Profile = ({ navigation }) => {
       if (!nextImages.length) return;
       setSelectedImages(nextImages.slice(0, 1));
     } catch {
-      Toast.show({ type: "error", text1: "Unable to pick image" });
     }
   };
 
@@ -415,7 +405,6 @@ const Profile = ({ navigation }) => {
   };
   const onCopyCoupon = (code) => {
     // Optional: use Clipboard API if you have expo-clipboard
-    Toast.show({ type: "success", text1: `Coupon ${code || ""} copied` });
   };
 
   const renderBookings = () => {

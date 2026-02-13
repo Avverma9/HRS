@@ -1,6 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../utils/api";
-import Toast from "react-native-toast-message";
 import { getUserId } from "../../utils/credentials";
 
 const parseNumber = (value) => {
@@ -47,15 +46,10 @@ export const applyCouponCode = createAsyncThunk(
       const res = await api.patch("/user-coupon/apply/a/coupon-to-room/user", payload);
       const parsed = normalizeResponse(res);
 
-      Toast.show({
-        type: "success",
-        text1: parsed?.message || "Coupon applied successfully",
-      });
 
       return parsed;
     } catch (err) {
       const message = err?.response?.data?.message || err?.message || "Unable to apply coupon";
-      Toast.show({ type: "error", text1: message });
       return rejectWithValue(message);
     }
   }

@@ -12,7 +12,6 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import ThemedStatusBar from './components/ThemedStatusBar';
-import Toast from 'react-native-toast-message';
 
 import BootScreen from './screens/BootScreen';
 import LoginPage from './screens/LoginRN';
@@ -49,7 +48,8 @@ function TabBar({ state, descriptors, navigation }) {
       <View className="flex-row justify-around items-center h-16 px-2">
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label = options.tabBarLabel ?? options.title ?? route.name;
+          let label = options.tabBarLabel ?? options.title ?? route.name;
+          if (route.name === 'Search') label = 'Home';
           const isFocused = state.index === index;
 
           const onPress = () => {
@@ -71,9 +71,8 @@ function TabBar({ state, descriptors, navigation }) {
           const size = 26; 
           let iconName = "alert-circle";
           switch (route.name) {
-            case 'Search': iconName = isFocused ? "search" : "search-outline"; break;
+            case 'Search': iconName = isFocused ? "home" : "home-outline"; break; // home icon
             case 'Cabs': iconName = isFocused ? "car" : "car-outline"; break;
-            case 'Holidays': iconName = isFocused ? "sunny" : "sunny-outline"; break;
             case 'Tour': iconName = isFocused ? "map" : "map-outline"; break;
             case 'Profile': iconName = isFocused ? "person-circle" : "person-circle-outline"; break;
           }
@@ -130,13 +129,13 @@ function TabNavigator() {
         options={({ route }) => {
           const routeName = getFocusedRouteNameFromRoute(route) ?? "Home";
           return {
-            title: 'Search',
+            title: 'Home',
+            tabBarLabel: 'Home',
             tabBarStyle: routeName === "HotelDetails" ? { display: "none" } : undefined,
           };
         }}
       />
       <Tab.Screen name="Cabs" component={Cabs} options={{ title: 'Cabs' }} />
-      <Tab.Screen name="Holidays" component={Holidays} options={{ title: 'Holidays' }} />
       <Tab.Screen name="Tour" component={Tour} options={{ title: 'Tours' }} />
       <Tab.Screen name="Profile" component={Profile} options={{ title: 'Profile' }} />
     </Tab.Navigator>
@@ -189,7 +188,6 @@ export default function App() {
             <NavigationContainer ref={navigationRef}>
               <RootNavigator />
             </NavigationContainer>
-            <Toast />
           </SafeAreaProvider>
         </ThemeProvider>
       </AuthProvider>

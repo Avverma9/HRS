@@ -16,7 +16,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import Toast from "react-native-toast-message";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { baseURL } from "../utils/baseUrl";
@@ -201,7 +200,6 @@ export default function LoginPage({ navigation }) {
   }, [resendTimer]);
 
   const showToast = (type, title, message) => {
-    Toast.show({ type, text1: title, text2: message, position: "top" });
   };
 
   const extractAuthPayload = (response) => {
