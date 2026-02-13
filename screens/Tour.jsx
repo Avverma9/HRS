@@ -1,85 +1,620 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../contexts/ThemeContext';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Image,
+  Modal,
+  Animated,
+  Easing,
+  Dimensions,
+  Platform,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useDispatch, useSelector } from "react-redux";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../contexts/ThemeContext";
+import { fetchTourList, searchToursFromTo } from "../store/slices/tourSlice";
+import { useNavigation } from "@react-navigation/native";
 
-export default function Tour() {
-  const { theme, isDark } = useTheme();
-  
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+const toNumber = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const parsed = Number(String(value || "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const splitCsvText = (value) =>
+  String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const getTourPlaces = (tour) => {
+  const raw = tour?.visitngPlaces || tour?.visitingPlaces || "";
+  const chunks = String(raw)
+    .split(/\||,/) // split by | or ,
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return chunks.slice(0, 4).join(", ");
+};
+
+const formatINR = (value) => {
+  const amount = toNumber(value);
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `₹${amount}`;
+  }
+};
+
+function Chip({ label, active, onPress }) {
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: theme.text }]}>
-          Tour Services
-        </Text>
-        
-        <View style={[styles.card, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>
-            Guided Tours
-          </Text>
-          <Text style={[styles.cardText, { color: theme.textSecondary }]}>
-            Explore with expert local guides and discover hidden gems
-          </Text>
-          
-          <View style={styles.tours}>
-            <View style={[styles.tour, { backgroundColor: isDark ? '#713f12' : '#fef3c7', borderLeftWidth: 4, borderLeftColor: isDark ? '#fbbf24' : '#f59e0b' }]}>
-              <Text style={[styles.tourTitle, { color: isDark ? '#fcd34d' : '#92400e' }]}>City Walking Tours</Text>
-              <Text style={[styles.tourSubtitle, { color: isDark ? '#fbbf24' : '#b45309' }]}>Historical & Cultural Sites</Text>
-              <Text style={[styles.tourDuration, { color: isDark ? '#fbbf24' : '#d97706' }]}>Duration: 3-4 hours</Text>
-              <Text style={[styles.tourPrice, { color: isDark ? '#fcd34d' : '#92400e' }]}>₹299 per person</Text>
-            </View>
-            
-            <View style={[styles.tour, { backgroundColor: isDark ? '#312e81' : '#e0e7ff', borderLeftWidth: 4, borderLeftColor: isDark ? '#818cf8' : '#6366f1', marginTop: 16 }]}>
-              <Text style={[styles.tourTitle, { color: isDark ? '#a5b4fc' : '#3730a3' }]}>Heritage Tours</Text>
-              <Text style={[styles.tourSubtitle, { color: isDark ? '#818cf8' : '#4338ca' }]}>Monuments & Palaces</Text>
-              <Text style={[styles.tourDuration, { color: isDark ? '#818cf8' : '#4f46e5' }]}>Duration: Full Day</Text>
-              <Text style={[styles.tourPrice, { color: isDark ? '#a5b4fc' : '#3730a3' }]}>₹899 per person</Text>
-            </View>
-            
-            <View style={[styles.tour, { backgroundColor: isDark ? '#134e4a' : '#ccfbf1', borderLeftWidth: 4, borderLeftColor: isDark ? '#2dd4bf' : '#14b8a6', marginTop: 16 }]}>
-              <Text style={[styles.tourTitle, { color: isDark ? '#5eead4' : '#134e4a' }]}>Nature Tours</Text>
-              <Text style={[styles.tourSubtitle, { color: isDark ? '#2dd4bf' : '#115e59' }]}>Wildlife & Landscapes</Text>
-              <Text style={[styles.tourDuration, { color: isDark ? '#2dd4bf' : '#0f766e' }]}>Duration: 2-3 days</Text>
-              <Text style={[styles.tourPrice, { color: isDark ? '#5eead4' : '#134e4a' }]}>₹2,499 per person</Text>
-            </View>
-            
-            <View style={[styles.tour, { backgroundColor: isDark ? '#881337' : '#ffe4e6', borderLeftWidth: 4, borderLeftColor: isDark ? '#fb7185' : '#f43f5e', marginTop: 16 }]}>
-              <Text style={[styles.tourTitle, { color: isDark ? '#fda4af' : '#881337' }]}>Adventure Tours</Text>
-              <Text style={[styles.tourSubtitle, { color: isDark ? '#fb7185' : '#9f1239' }]}>Trekking & Water Sports</Text>
-              <Text style={[styles.tourDuration, { color: isDark ? '#fb7185' : '#be123c' }]}>Duration: Customizable</Text>
-              <Text style={[styles.tourPrice, { color: isDark ? '#fda4af' : '#881337' }]}>Starting ₹1,999</Text>
-            </View>
-          </View>
-        </View>
-        
-        <View style={[styles.card, { backgroundColor: theme.surface, marginTop: 16 }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>
-            Tour Features
-          </Text>
-          <Text style={[styles.feature, { color: theme.textSecondary }]}>• Expert Local Guides</Text>
-          <Text style={[styles.feature, { color: theme.textSecondary }]}>• Small Group Experience</Text>
-          <Text style={[styles.feature, { color: theme.textSecondary }]}>• Photography Assistance</Text>
-          <Text style={[styles.feature, { color: theme.textSecondary }]}>• Cultural Insights</Text>
-          <Text style={[styles.feature, { color: theme.textSecondary }]}>• Flexible Itineraries</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      className={`rounded-full px-3 py-2 mr-2 border ${
+        active ? "bg-blue-50 border-blue-400" : "bg-white border-slate-200"
+      }`}
+    >
+      <Text className={`text-[12px] font-semibold ${active ? "text-blue-700" : "text-slate-700"}`} numberOfLines={1}>
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 32 },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 24, textAlign: 'center' },
-  card: { borderRadius: 12, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  cardTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
-  cardText: { fontSize: 14, marginBottom: 16, lineHeight: 20 },
-  tours: { marginTop: 8 },
-  tour: { padding: 16, borderRadius: 10 },
-  tourTitle: { fontWeight: 'bold', fontSize: 16 },
-  tourSubtitle: { fontSize: 13, marginTop: 4 },
-  tourDuration: { fontSize: 13, marginTop: 2 },
-  tourPrice: { fontSize: 14, fontWeight: '600', marginTop: 6 },
-  feature: { fontSize: 14, marginBottom: 8, lineHeight: 20 },
-});
+function PrimaryButton({ title, onPress }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.9}
+      className="h-10 rounded-xl items-center justify-center px-4 bg-[#0d3b8f]"
+    >
+      <Text className="text-white font-extrabold text-[13px]">{title}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function SkeletonShimmer({ height = 12, width = "100%", radius = 14, style }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(shimmer, {
+        toValue: 1,
+        duration: 1100,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+
+  const translateX = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-SCREEN_WIDTH, SCREEN_WIDTH],
+  });
+
+  return (
+    <View
+      style={[
+        {
+          height,
+          width,
+          borderRadius: radius,
+          backgroundColor: "rgba(148, 163, 184, 0.22)",
+          overflow: "hidden",
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: "40%",
+          transform: [{ translateX }],
+          backgroundColor: "rgba(255,255,255,0.55)",
+        }}
+      />
+    </View>
+  );
+}
+
+function TourCardSkeleton() {
+  return (
+    <View className="mx-4 mb-4 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <SkeletonShimmer height={150} width="100%" radius={0} />
+      <View className="p-3">
+        <View className="flex-row items-center justify-between">
+          <SkeletonShimmer height={18} width={86} radius={10} />
+          <SkeletonShimmer height={18} width={70} radius={10} />
+        </View>
+        <SkeletonShimmer height={14} width={230} radius={10} style={{ marginTop: 10 }} />
+        <SkeletonShimmer height={10} width={120} radius={8} style={{ marginTop: 10 }} />
+        <View className="h-px bg-slate-100 my-3" />
+        <View className="flex-row items-end justify-between">
+          <SkeletonShimmer height={28} width={130} radius={12} />
+          <SkeletonShimmer height={40} width={110} radius={14} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TourCard({ tour, onPressDetails }) {
+  const rating = toNumber(tour?.starRating) || 0;
+  const price = toNumber(tour?.price);
+  const places = getTourPlaces(tour) || "-";
+  const city = tour?.city || "-";
+  const agency = tour?.travelAgencyName || "-";
+  const nights = toNumber(tour?.nights);
+  const days = toNumber(tour?.days);
+
+  const theme = splitCsvText(tour?.themes)[0] || "";
+
+  const amenities = Array.isArray(tour?.amenities)
+    ? tour.amenities.map((a) => String(a || "").trim()).filter(Boolean)
+    : splitCsvText(tour?.amenities);
+
+  return (
+    <View className="mx-4 mb-4 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <View className="relative h-[150px] bg-slate-200">
+        {tour?.images?.[0] ? (
+          <Image source={{ uri: tour.images[0] }} className="w-full h-full" resizeMode="cover" />
+        ) : (
+          <View className="w-full h-full bg-slate-300" />
+        )}
+
+        <View className="absolute top-3 left-3 bg-white/95 rounded-full px-2 py-1 flex-row items-center" style={{ gap: 6 }}>
+          <Ionicons name="star" size={12} color="#f59e0b" />
+          <Text className="text-[12px] font-black text-slate-800">{rating.toFixed(1)}</Text>
+        </View>
+
+        <View className="absolute top-3 right-3 bg-white/95 rounded-full px-2 py-1 flex-row items-center" style={{ gap: 6 }}>
+          <Ionicons name="moon" size={12} color="#0f429e" />
+          <Text className="text-[12px] font-black text-slate-800">{`${nights || 0}N / ${days || 0}D`}</Text>
+        </View>
+
+        <View className="absolute left-0 right-0 bottom-0 px-3 pb-2 pt-8" style={{ backgroundColor: "rgba(15,23,42,0.55)" }}>
+          <Text className="text-white text-[18px] leading-6 font-black" numberOfLines={2}>
+            {places}
+          </Text>
+          <View className="flex-row items-center mt-1">
+            <Ionicons name="location-sharp" size={12} color="#ffffff" />
+            <Text className="text-white/95 text-[12px] ml-1" numberOfLines={1}>
+              {city}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View className="p-3">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200" style={{ gap: 6, maxWidth: "70%" }}>
+            <Ionicons name="business" size={12} color="#334155" />
+            <Text className="text-[12px] font-bold text-slate-700" numberOfLines={1}>
+              {agency}
+            </Text>
+          </View>
+
+          {!!theme && (
+            <View className="px-2.5 py-1.5 rounded-xl bg-blue-50 border border-blue-100">
+              <Text className="text-[11px] font-bold text-blue-700" numberOfLines={1}>
+                {theme}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {!!amenities.length && (
+          <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
+            {amenities.slice(0, 2).map((am, idx) => (
+              <View key={`${am}-${idx}`} className="px-2 py-1 rounded-lg border border-slate-200 bg-white">
+                <Text className="text-[10px] text-slate-500">{am}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View className="h-px bg-slate-100 my-3" />
+
+        <View className="flex-row items-end justify-between">
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Text className="text-[10px] font-black tracking-wider text-slate-400">STARTING FROM</Text>
+            <Text className="text-[22px] leading-7 font-black text-[#113d90]" numberOfLines={1}>
+              {formatINR(price)}
+              <Text className="text-[11px] font-semibold text-slate-500"> / person</Text>
+            </Text>
+          </View>
+          <PrimaryButton title="View details" onPress={onPressDetails} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export default function Tour() {
+  const navigation = useNavigation();
+  const dispatch = useDispatch();
+  const { isDark } = useTheme();
+  const tourState = useSelector((state) => state.tour);
+
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [searchText, setSearchText] = useState("");
+
+  const [fromCity, setFromCity] = useState("");
+  const [toCity, setToCity] = useState("");
+
+  const [tourPriceRange, setTourPriceRange] = useState([0, 50000]);
+  const [tourMinRating, setTourMinRating] = useState(0);
+  const [tourSelectedAmenities, setTourSelectedAmenities] = useState([]);
+  const [selectedThemes, setSelectedThemes] = useState([]);
+  const hasFromToSearchRef = useRef(false);
+
+  const tours = Array.isArray(tourState?.items) ? tourState.items : [];
+  const isLoading = tourState?.status === "loading";
+
+  const tourThemesList = useMemo(() => {
+    const themes = tours.flatMap((tour) => splitCsvText(tour?.themes));
+    return [...new Set(themes)].filter(Boolean);
+  }, [tours]);
+
+  const tourAmenitiesList = useMemo(() => {
+    const amenities = tours.flatMap((tour) => {
+      if (Array.isArray(tour?.amenities)) {
+        return tour.amenities.map((item) => String(item || "").trim()).filter(Boolean);
+      }
+      return splitCsvText(tour?.amenities);
+    });
+    return [...new Set(amenities)].filter(Boolean);
+  }, [tours]);
+
+  const filteredTours = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    const fromQ = fromCity.trim().toLowerCase();
+    const toQ = toCity.trim().toLowerCase();
+
+    return tours.filter((tour) => {
+      const price = toNumber(tour?.price);
+      const rating = toNumber(tour?.starRating);
+      const themeTokens = splitCsvText(tour?.themes);
+      const amenityTokens = Array.isArray(tour?.amenities)
+        ? tour.amenities.map((item) => String(item || "").trim()).filter(Boolean)
+        : splitCsvText(tour?.amenities);
+
+      const places = getTourPlaces(tour).toLowerCase();
+      const agency = String(tour?.travelAgencyName || "").toLowerCase();
+      const city = String(tour?.city || "").toLowerCase();
+
+      const themesMatch = !selectedThemes.length || selectedThemes.some((theme) => themeTokens.includes(theme));
+      const amenitiesMatch =
+        !tourSelectedAmenities.length || tourSelectedAmenities.every((amenity) => amenityTokens.includes(amenity));
+      const priceMatch = price >= tourPriceRange[0] && price <= tourPriceRange[1];
+      const ratingMatch = !tourMinRating || rating >= tourMinRating;
+
+      const fromMatch = !fromQ || agency.includes(fromQ) || places.includes(fromQ) || city.includes(fromQ);
+      const toMatch = !toQ || places.includes(toQ) || city.includes(toQ);
+
+      const searchMatch = !query || places.includes(query) || agency.includes(query) || city.includes(query);
+
+      return themesMatch && amenitiesMatch && priceMatch && ratingMatch && fromMatch && toMatch && searchMatch;
+    });
+  }, [searchText, fromCity, toCity, selectedThemes, tourMinRating, tourPriceRange, tourSelectedAmenities, tours]);
+
+  const toggleTheme = (theme) => {
+    setSelectedThemes((prev) => (prev.includes(theme) ? prev.filter((item) => item !== theme) : [...prev, theme]));
+  };
+
+  const toggleAmenity = (amenity) => {
+    setTourSelectedAmenities((prev) =>
+      prev.includes(amenity) ? prev.filter((item) => item !== amenity) : [...prev, amenity]
+    );
+  };
+
+  useEffect(() => {
+    dispatch(fetchTourList());
+  }, [dispatch]);
+
+  useEffect(() => {
+    const from = String(fromCity || "").trim();
+    const to = String(toCity || "").trim();
+
+    if (!from && !to) {
+      if (hasFromToSearchRef.current) {
+        dispatch(fetchTourList());
+        hasFromToSearchRef.current = false;
+      }
+      return undefined;
+    }
+
+    hasFromToSearchRef.current = true;
+
+    const timer = setTimeout(() => {
+      dispatch(searchToursFromTo({ from, to }));
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [dispatch, fromCity, toCity]);
+
+  const headerBg = isDark ? "bg-slate-950" : "bg-slate-100";
+  const titleColor = isDark ? "text-white" : "text-slate-900";
+
+  return (
+    <SafeAreaView className={`flex-1 ${headerBg}`}>
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+        <View className="px-4 pt-2 pb-3">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center" style={{ gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                activeOpacity={0.9}
+                className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center"
+              >
+                <Ionicons name="arrow-back" size={18} color="#0f172a" />
+              </TouchableOpacity>
+              <View>
+                <Text className={`text-[17px] font-black ${titleColor}`}>Explore Tours</Text>
+                <Text className={`${isDark ? "text-slate-300" : "text-slate-600"} text-[12px] mt-0.5`}>
+                  Compact search • better filters
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setShowFilterModal(true)}
+              activeOpacity={0.9}
+              className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center"
+            >
+              <Ionicons name="options-outline" size={18} color="#0f172a" />
+            </TouchableOpacity>
+          </View>
+
+          {/* FROM / TO (compact) */}
+          <View className="mt-3 flex-row" style={{ gap: 10 }}>
+            <View className="flex-1 h-11 rounded-2xl bg-white border border-slate-200 px-3 flex-row items-center" style={{ gap: 8 }}>
+              <Ionicons name="radio-button-on" size={14} color="#10b981" />
+              <TextInput
+                value={fromCity}
+                onChangeText={setFromCity}
+                placeholder="From"
+                placeholderTextColor="#94a3b8"
+                className="flex-1 text-slate-800 font-semibold"
+                autoCorrect={false}
+              />
+            </View>
+            <View className="flex-1 h-11 rounded-2xl bg-white border border-slate-200 px-3 flex-row items-center" style={{ gap: 8 }}>
+              <Ionicons name="location" size={14} color="#3b82f6" />
+              <TextInput
+                value={toCity}
+                onChangeText={setToCity}
+                placeholder="To"
+                placeholderTextColor="#94a3b8"
+                className="flex-1 text-slate-800 font-semibold"
+                autoCorrect={false}
+              />
+            </View>
+          </View>
+
+          {/* Search */}
+          <View className="mt-3 h-11 rounded-2xl bg-white border border-slate-200 px-3 flex-row items-center">
+            <Ionicons name="search" size={16} color="#64748b" />
+            <TextInput
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Search packages, agency, city..."
+              placeholderTextColor="#94a3b8"
+              className="flex-1 ml-2 text-slate-800 font-semibold"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {!!searchText && (
+              <TouchableOpacity onPress={() => setSearchText("")} className="p-2">
+                <Ionicons name="close-circle" size={18} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* ONLY ONE FILTER ROW (removed extra “Filters” chip) */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
+            {tourThemesList.slice(0, 10).map((theme) => (
+              <Chip key={theme} label={theme} active={selectedThemes.includes(theme)} onPress={() => toggleTheme(theme)} />
+            ))}
+          </ScrollView>
+
+          {!!(selectedThemes.length || tourSelectedAmenities.length || tourMinRating || tourPriceRange[0] !== 0 || fromCity || toCity || searchText) && (
+            <View className="mt-3 flex-row flex-wrap items-center" style={{ gap: 8 }}>
+              <View className="px-3 py-1.5 rounded-full bg-slate-900">
+                <Text className="text-[12px] font-extrabold text-white">{filteredTours.length} results</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setTourPriceRange([0, 50000]);
+                  setTourMinRating(0);
+                  setTourSelectedAmenities([]);
+                  setSelectedThemes([]);
+                  setFromCity("");
+                  setToCity("");
+                  setSearchText("");
+                }}
+                className="px-3 py-1.5 rounded-full bg-white border border-slate-200"
+              >
+                <Text className="text-[12px] font-extrabold text-slate-600">Clear</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {isLoading && (
+          <View>
+            {[...Array(5)].map((_, idx) => (
+              <TourCardSkeleton key={`sk-${idx}`} />
+            ))}
+          </View>
+        )}
+
+        {tourState?.status === "failed" && (
+          <View className="mx-4 bg-white rounded-2xl p-4 border border-red-200">
+            <Text className="text-red-600 text-[13px] font-semibold">
+              {String(tourState?.error?.message || tourState?.error || "Failed to load tours")}
+            </Text>
+          </View>
+        )}
+
+        {!isLoading && tourState?.status !== "failed" && !tours.length && (
+          <View className="mx-4 bg-white rounded-2xl p-4 border border-slate-200">
+            <Text className="text-slate-500 text-[13px]">No tours available right now.</Text>
+          </View>
+        )}
+
+        {!isLoading && !!tours.length && !filteredTours.length && (
+          <View className="mx-4 bg-white rounded-2xl p-4 border border-slate-200">
+            <Text className="text-slate-500 text-[13px]">No tours match current filters.</Text>
+          </View>
+        )}
+
+        {!isLoading &&
+          filteredTours.map((tour) => (
+            <TourCard
+              key={tour?._id || `${tour?.travelAgencyName || "tour"}-${tour?.createdAt || Math.random()}`}
+              tour={tour}
+              onPressDetails={() => {
+                // navigation.navigate("TourDetails", { id: tour._id })
+              }}
+            />
+          ))}
+      </ScrollView>
+
+      <Modal visible={showFilterModal} animationType="slide" transparent onRequestClose={() => setShowFilterModal(false)}>
+        <View className="flex-1 bg-black/60 justify-end">
+          <View className="bg-white w-full rounded-t-3xl p-5 h-[82%]">
+            <View className="flex-row justify-between items-center mb-4">
+              <View>
+                <Text className="text-[18px] font-black text-slate-900">Filters</Text>
+                <Text className="text-[12px] text-slate-500 mt-1">Refine by price, rating, theme, amenities</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)} className="p-2 bg-slate-100 rounded-full">
+                <Ionicons name="close" size={18} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+              <Text className="text-[13px] font-black text-slate-900 mb-3">Price Range</Text>
+              <View className="flex-row" style={{ gap: 10 }}>
+                {[0, 5000, 15000].map((start) => {
+                  const end = start === 0 ? 5000 : start === 5000 ? 15000 : 50000;
+                  const label = start === 15000 ? "₹15000+" : `₹${start} - ₹${end}`;
+                  const isSelected = tourPriceRange[0] === start;
+                  return (
+                    <TouchableOpacity
+                      key={start}
+                      onPress={() => setTourPriceRange([start, end])}
+                      activeOpacity={0.9}
+                      className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                    >
+                      <Text className={`text-[12px] font-extrabold ${isSelected ? "text-blue-700" : "text-slate-600"}`}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View className="mt-6">
+                <Text className="text-[13px] font-black text-slate-900 mb-3">Star Rating</Text>
+                <View className="flex-row" style={{ gap: 10 }}>
+                  {[3, 4, 5].map((stars) => {
+                    const isSelected = tourMinRating === stars;
+                    return (
+                      <TouchableOpacity
+                        key={stars}
+                        onPress={() => setTourMinRating((prev) => (prev === stars ? 0 : stars))}
+                        activeOpacity={0.9}
+                        className={`flex-1 py-2.5 border rounded-xl flex-row items-center justify-center ${
+                          isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"
+                        }`}
+                      >
+                        <Text className={`font-black ${isSelected ? "text-blue-700" : "text-slate-600"}`}>{stars}</Text>
+                        <Ionicons name="star" size={12} color={isSelected ? "#1d4ed8" : "#64748b"} style={{ marginLeft: 6 }} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className="mt-6">
+                <Text className="text-[13px] font-black text-slate-900 mb-3">Themes</Text>
+                <View className="flex-row flex-wrap" style={{ gap: 10 }}>
+                  {tourThemesList.map((theme, index) => {
+                    const isSelected = selectedThemes.includes(theme);
+                    return (
+                      <TouchableOpacity
+                        key={`${theme}-${index}`}
+                        onPress={() => toggleTheme(theme)}
+                        activeOpacity={0.9}
+                        className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                      >
+                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-500"}`}>{theme}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className="mt-6">
+                <Text className="text-[13px] font-black text-slate-900 mb-3">Amenities</Text>
+                <View className="flex-row flex-wrap" style={{ gap: 10 }}>
+                  {tourAmenitiesList.map((amenity, index) => {
+                    const isSelected = tourSelectedAmenities.includes(amenity);
+                    return (
+                      <TouchableOpacity
+                        key={`${amenity}-${index}`}
+                        onPress={() => toggleAmenity(amenity)}
+                        activeOpacity={0.9}
+                        className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                      >
+                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-500"}`}>{amenity}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View className="flex-row mt-5 pt-4 border-t border-slate-100" style={{ gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setTourPriceRange([0, 50000]);
+                  setTourMinRating(0);
+                  setTourSelectedAmenities([]);
+                  setSelectedThemes([]);
+                }}
+                activeOpacity={0.9}
+                className="flex-1 h-12 rounded-xl items-center justify-center bg-slate-100"
+              >
+                <Text className="font-black text-slate-600">Clear</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setShowFilterModal(false)}
+                activeOpacity={0.9}
+                className="flex-[2] h-12 rounded-xl items-center justify-center bg-[#0d3b8f]"
+              >
+                <Text className="text-white font-black">Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}

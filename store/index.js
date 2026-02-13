@@ -7,6 +7,7 @@ import bookingSlice from "./slices/bookingSlice";
 import profileUpdateSlice from "./slices/profileUpdateSlice";
 import couponSlice from "./slices/couponSlice";
 import complaintSlice from "./slices/complaintSlice";
+import tourSlice from "./slices/tourSlice";
 
 export const store = configureStore({
   reducer: {
@@ -18,6 +19,7 @@ export const store = configureStore({
     profileUpdate: profileUpdateSlice,
     coupons: couponSlice,
     complaints: complaintSlice,
+    tour: tourSlice,
   },
 });
 

@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -152,6 +155,95 @@ const calculateBookingCosts = (booking) => {
     totalPaid,
   };
 };
+
+const SkeletonShimmer = ({ height = 12, width = "100%", radius = 8, style }) => {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  const screenWidth = Dimensions.get("window").width;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(shimmer, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+
+  const translateX = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-screenWidth, screenWidth],
+  });
+
+  return (
+    <View
+      style={[
+        {
+          height,
+          width,
+          borderRadius: radius,
+          backgroundColor: "rgba(226,232,240,0.6)",
+          overflow: "hidden",
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          width: "40%",
+          transform: [{ translateX }],
+          backgroundColor: "rgba(255,255,255,0.3)",
+        }}
+      />
+    </View>
+  );
+};
+
+const ProfileHeaderSkeleton = () => (
+  <View className="px-4 py-2 flex-row items-center justify-between" style={{ marginTop: 20 }}>
+    <View className="flex-1 flex-row items-center">
+      <SkeletonShimmer height={56} width={56} radius={999} />
+      <View className="flex-1 ml-3">
+        <SkeletonShimmer height={20} width="58%" radius={6} />
+        <SkeletonShimmer height={12} width="72%" radius={6} style={{ marginTop: 8 }} />
+        <SkeletonShimmer height={12} width="48%" radius={6} style={{ marginTop: 6 }} />
+      </View>
+    </View>
+    <SkeletonShimmer height={40} width={40} radius={999} style={{ marginLeft: 12 }} />
+  </View>
+);
+
+const ProfileTabSkeleton = () => (
+  <View>
+    <View className="bg-white rounded-xl border border-slate-200 p-4 mb-3 shadow-sm">
+      <SkeletonShimmer height={10} width={140} radius={6} style={{ marginBottom: 18 }} />
+      {[0, 1, 2].map((index) => (
+        <View key={index}>
+          <View className="flex-row items-center mb-4">
+            <SkeletonShimmer height={40} width={40} radius={10} />
+            <View className="flex-1 ml-3">
+              <SkeletonShimmer height={10} width="42%" radius={6} />
+              <SkeletonShimmer height={14} width="70%" radius={6} style={{ marginTop: 8 }} />
+            </View>
+          </View>
+          {index < 2 && <View className="h-[1px] bg-slate-100 my-3" />}
+        </View>
+      ))}
+    </View>
+
+    <View className="bg-white rounded-xl border border-slate-200 p-4 mb-3 shadow-sm">
+      <SkeletonShimmer height={10} width={110} radius={6} style={{ marginBottom: 18 }} />
+      <SkeletonShimmer height={14} width="56%" radius={6} />
+      <SkeletonShimmer height={14} width="40%" radius={6} style={{ marginTop: 14 }} />
+    </View>
+  </View>
+);
 
 const BookingCard = ({ item, onViewBooking }) => {
   const hotelName = item?.hotelDetails?.hotelName || "Hotel";
@@ -753,6 +845,9 @@ const Profile = ({ navigation }) => {
   };
 
   const renderProfileTab = () => (
+    userState?.loading ? (
+      <ProfileTabSkeleton />
+    ) : (
     <View>
       <View className="bg-white rounded-xl border border-slate-200 p-4 mb-3 shadow-sm">
         <Text className="text-xs font-bold text-slate-400 tracking-wider mb-4">CONTACT INFORMATION</Text>
@@ -820,6 +915,7 @@ const Profile = ({ navigation }) => {
         <Text className="text-sm font-bold text-red-500 ml-2">Sign Out</Text>
       </TouchableOpacity>
     </View>
+    )
   );
 
   const renderTabContent = () => {
@@ -841,36 +937,40 @@ const Profile = ({ navigation }) => {
           onBackPress={handleProfileHeaderBack}
         />
 
-        <View className="px-4 py-2 flex-row items-center justify-between" style={{ marginTop: 20 }}>
-          <View className="flex-1 flex-row items-center">
-            <Image
-              source={{
-                uri:
-                  profileImage ||
-                  "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=300&auto=format&fit=crop",
-              }}
-              className="w-14 h-14 rounded-full bg-slate-200"
-            />
-            <View className="flex-1 ml-3">
-              <Text className="text-xl font-black text-slate-900" numberOfLines={1}>
-                {user?.userName || "Rahul Sharma"}
-              </Text>
-              <Text className="text-xs text-slate-500 mt-0.5 font-medium" numberOfLines={1}>
-                {user?.email || "rahul.sharma@example.com"}
-              </Text>
-              <Text className="text-xs text-slate-400 mt-0.5" numberOfLines={1}>
-                {user?.address || "No address added"}
-              </Text>
+        {userState?.loading ? (
+          <ProfileHeaderSkeleton />
+        ) : (
+          <View className="px-4 py-2 flex-row items-center justify-between" style={{ marginTop: 20 }}>
+            <View className="flex-1 flex-row items-center">
+              {profileImage ? (
+                <Image
+                  source={{ uri: profileImage }}
+                  className="w-14 h-14 rounded-full bg-slate-200"
+                />
+              ) : (
+                <View className="w-14 h-14 rounded-full bg-slate-200" />
+              )}
+              <View className="flex-1 ml-3">
+                <Text className="text-xl font-black text-slate-900" numberOfLines={1}>
+                  {user?.userName || "-"}
+                </Text>
+                <Text className="text-xs text-slate-500 mt-0.5 font-medium" numberOfLines={1}>
+                  {user?.email || "-"}
+                </Text>
+                <Text className="text-xs text-slate-400 mt-0.5" numberOfLines={1}>
+                  {user?.address || "-"}
+                </Text>
+              </View>
             </View>
-          </View>
 
-          <TouchableOpacity
-            className="w-10 h-10 rounded-full border border-blue-200 bg-blue-50 items-center justify-center"
-            onPress={openUpdateModal}
-          >
-            <Ionicons name="create-outline" size={20} color="#1d4ed8" />
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              className="w-10 h-10 rounded-full border border-blue-200 bg-blue-50 items-center justify-center"
+              onPress={openUpdateModal}
+            >
+              <Ionicons name="create-outline" size={20} color="#1d4ed8" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View className="border-t border-b border-slate-200 bg-white flex-row px-2">
           {TABS.map((tab) => {
@@ -893,13 +993,6 @@ const Profile = ({ navigation }) => {
           contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
         >
-          {userState?.loading && (
-            <View className="flex-row items-center mb-3">
-              <ActivityIndicator size="small" color="#2563eb" />
-              <Text className="text-sm text-slate-600 ml-2 font-medium">Loading profile...</Text>
-            </View>
-          )}
-
           {!!userState?.error && (
             <Text className="text-xs text-red-600 font-bold mb-3">
               {String(userState?.error?.message || userState?.error)}
@@ -1134,7 +1227,7 @@ const Profile = ({ navigation }) => {
               <TouchableOpacity onPress={closeUpdateModal} className="mr-3">
                 <Ionicons name="arrow-back" size={22} color="#0f172a" />
               </TouchableOpacity>
-              <Text className="text-[29px] leading-8 font-black text-slate-900">Edit Profile</Text>
+              <Text className="text-[17px] leading-8 font-black text-slate-900">Edit Profile</Text>
             </View>
 
             <ScrollView
@@ -1144,15 +1237,16 @@ const Profile = ({ navigation }) => {
             >
               <View className="items-center mb-6">
                 <View className="relative">
-                  <Image
-                    source={{
-                      uri:
-                        selectedImages[0]?.uri ||
-                        profileImage ||
-                        "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=300&auto=format&fit=crop",
-                    }}
-                    className="w-24 h-24 rounded-full bg-slate-200"
-                  />
+                  {selectedImages[0]?.uri || profileImage ? (
+                    <Image
+                      source={{
+                        uri: selectedImages[0]?.uri || profileImage,
+                      }}
+                      className="w-24 h-24 rounded-full bg-slate-200"
+                    />
+                  ) : (
+                    <View className="w-24 h-24 rounded-full bg-slate-200" />
+                  )}
                   <TouchableOpacity
                     onPress={handlePickImages}
                     className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-blue-800 items-center justify-center border-2 border-white"
