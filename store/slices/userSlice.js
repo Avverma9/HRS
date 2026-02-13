@@ -1,16 +1,20 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../utils/api";
-import { getUserId } from "../../utils/credentials";
+import { getUserEmail, getUserId } from "../../utils/credentials";
 
 export const fetchProfileData = createAsyncThunk(
   "profile/fetchProfileData",
   async (_, { rejectWithValue }) => {
     const userId = await getUserId();
+    if (!userId) {
+      return rejectWithValue({ message: "User ID not found. Please login again." });
+    }
+
     try {
       const response = await api.get(`/get/${userId}`);
-      return response.data.data;
+      return response.data?.data || null;
     } catch (err) {
-      return rejectWithValue(err.response.data);
+      return rejectWithValue(err?.response?.data || { message: err?.message || "Unable to fetch profile" });
     }
   }
 );
@@ -35,6 +39,11 @@ export const fetchDefaultCoupon = createAsyncThunk(
   "profile/fetchDefaultCoupon",
   async (_, { rejectWithValue }) => {
     try {
+      const userEmail = await getUserEmail();
+      if (!userEmail) {
+        return rejectWithValue({ message: "User email not found." });
+      }
+
       const response = await api.post("/user-coupon/get-default-coupon/user", {
         email: userEmail,
       });
@@ -72,10 +81,6 @@ const user = createSlice({
       .addCase(fetchProfileData.fulfilled, (state, action) => {
         state.data = action.payload;
         state.loading = false;
-        if (action.payload.userImage?.length > 0) {
-          const firstImageUrl = action.payload.userImage[0];
-          localStorage.setItem("userImage", firstImageUrl);
-        }
       })
       .addCase(fetchProfileData.rejected, (state, action) => {
         state.loading = false;

@@ -1,196 +1,202 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Modal,
-  FlatList,
-  ActivityIndicator,
-  Dimensions,
-  StyleSheet,
-  Animated,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Toast from "react-native-toast-message";
+import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from "expo-blur";
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import Toast from "react-native-toast-message";
+import { LinearGradient } from "expo-linear-gradient";
+
 import { baseURL } from "../utils/baseUrl";
-import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from "../contexts/AuthContext";
 
 const { width, height } = Dimensions.get("window");
 
-const countryCodes = [
-  { code: "+91", country: "IN", flag: "🇮🇳", name: "India" },
-  { code: "+1", country: "US", flag: "🇺🇸", name: "United States" },
-  { code: "+44", country: "GB", flag: "🇬🇧", name: "United Kingdom" },
-  { code: "+61", country: "AU", flag: "🇦🇺", name: "Australia" },
-  { code: "+33", country: "FR", flag: "🇫🇷", name: "France" },
-  { code: "+49", country: "DE", flag: "🇩🇪", name: "Germany" },
-  { code: "+81", country: "JP", flag: "🇯🇵", name: "Japan" },
-  { code: "+82", country: "KR", flag: "🇰🇷", name: "South Korea" },
-  { code: "+55", country: "BR", flag: "🇧🇷", name: "Brazil" },
+const COUNTRY_CODES = [
+  { code: "+91", name: "India" },
+  { code: "+1", name: "United States" },
+  { code: "+44", name: "United Kingdom" },
+  { code: "+61", name: "Australia" },
+  { code: "+971", name: "UAE" },
 ];
 
-// Country Code Dropdown with modern styling
-function CountryCodeDropdown({ selectedCode, onSelect, disabled, isDark }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+const BG_ICONS = [
+  "bed-outline",
+  "camera-outline",
+  "restaurant-outline",
+  "airplane-outline",
+  "key-outline",
+  "business-outline",
+];
 
-  const filtered = countryCodes.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.code.includes(searchTerm)
-  );
+function PatternBackground() {
+  const iconSize = 24;
+  const stepX = 56;
+  const stepY = 56;
+  const rows = Math.ceil(height / stepY) + 2;
+  const cols = Math.ceil(width / stepX) + 2;
 
-  return (
-    <View style={styles.countryDropdown}>
-      <TouchableOpacity
-        disabled={disabled}
-        onPress={() => setIsOpen(true)}
-        style={[styles.countryButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: isDark ? '#334155' : '#e2e8f0' }]}
-      >
-        <Text style={[styles.countryCode, { color: isDark ? '#f1f5f9' : '#0f172a' }]}>
-          {selectedCode}
-        </Text>
-      </TouchableOpacity>
-
-      <Modal visible={isOpen} transparent animationType="slide">
-        <View style={styles.modalBackground}>
-          <BlurView intensity={50} tint={isDark ? 'dark' : 'light'} style={styles.modalContent}>
-            <View style={[styles.modalHeader, { borderBottomColor: isDark ? '#334155' : '#e2e8f0' }]}>
-              <Text style={[styles.modalTitle, { color: isDark ? '#f1f5f9' : '#0f172a' }]}>Select Country</Text>
-              <TouchableOpacity onPress={() => setIsOpen(false)} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color={isDark ? '#94a3b8' : '#64748b'} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              placeholder="Search country..."
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              style={[styles.searchInput, { color: isDark ? '#f1f5f9' : '#0f172a', backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderColor: isDark ? '#334155' : '#cbd5e1' }]}
-              placeholderTextColor={isDark ? '#64748b' : '#94a3b8'}
-            />
-            <FlatList
-              data={filtered}
-              keyExtractor={(i) => i.code}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.countryItem, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
-                  onPress={() => {
-                    onSelect(item.code);
-                    setIsOpen(false);
-                    setSearchTerm("");
-                  }}
-                >
-                  <Text style={styles.countryFlag}>{item.flag}</Text>
-                  <Text style={[styles.countryName, { color: isDark ? '#f1f5f9' : '#0f172a' }]}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.countryCodeText, { color: isDark ? '#94a3b8' : '#64748b' }]}>
-                    {item.code}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={() => (
-                <Text style={[styles.emptyText, { color: isDark ? '#64748b' : '#94a3b8' }]}>
-                  No match found
-                </Text>
-              )}
-            />
-          </BlurView>
-        </View>
-      </Modal>
-    </View>
-  );
-}
-
-// Modern OTP Input
-function SixDigitOTP({ disabled, onComplete, value = "", isDark }) {
-  const [vals, setVals] = useState(Array(6).fill(""));
-  const refs = useRef([]);
-
-  useEffect(() => {
-    if (value.length === 6) setVals(value.split(""));
-    else if (value === "") setVals(Array(6).fill(""));
-  }, [value]);
-
-  const handleChange = (i, v) => {
-    if (!/^[0-9]?$/.test(v)) return;
-    const next = [...vals];
-    next[i] = v;
-    setVals(next);
-    if (v && i < 5) refs.current[i + 1]?.focus();
-    onComplete(next.every((d) => d) ? next.join("") : "");
-  };
+  const cells = useMemo(() => {
+    const result = [];
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        const left = c * stepX + (r % 2 ? 14 : 0);
+        const top = r * stepY + 2;
+        const iconName = BG_ICONS[(r + c) % BG_ICONS.length];
+        result.push({ key: `${r}-${c}`, left, top, iconName });
+      }
+    }
+    return result;
+  }, [rows, cols]);
 
   return (
-    <View style={styles.otpContainer}>
-      {vals.map((val, i) => (
-        <TextInput
-          key={i}
-          ref={(el) => (refs.current[i] = el)}
-          value={val}
-          onChangeText={(t) => handleChange(i, t)}
-          keyboardType="number-pad"
-          maxLength={1}
-          editable={!disabled}
-          style={[
-            styles.otpInput,
-            val ? styles.otpInputFilled : (isDark ? styles.otpInputEmptyDark : styles.otpInputEmpty)
-          ]}
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {cells.map((cell) => (
+        <Ionicons
+          key={cell.key}
+          name={cell.iconName}
+          size={iconSize}
+          color="#94a3b8"
+          style={[styles.patternIcon, { left: cell.left, top: cell.top }]}
         />
       ))}
     </View>
   );
 }
 
-// Main Professional Login Component
+function CountryCodePicker({ selectedCode, onSelect, disabled }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <TouchableOpacity
+        style={[styles.countryButton, disabled && styles.countryButtonDisabled]}
+        disabled={disabled}
+        onPress={() => setOpen(true)}
+      >
+        <Text style={styles.countryButtonText}>{selectedCode}</Text>
+      </TouchableOpacity>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <View style={styles.countryModalBackdrop}>
+          <View style={styles.countryModal}>
+            <View style={styles.countryModalHeader}>
+              <Text style={styles.countryModalTitle}>Select country code</Text>
+              <TouchableOpacity onPress={() => setOpen(false)}>
+                <Ionicons name="close" size={20} color="#334155" />
+              </TouchableOpacity>
+            </View>
+
+            {COUNTRY_CODES.map((item) => (
+              <TouchableOpacity
+                key={item.code}
+                style={styles.countryItem}
+                onPress={() => {
+                  onSelect(item.code);
+                  setOpen(false);
+                }}
+              >
+                <Text style={styles.countryItemName}>{item.name}</Text>
+                <Text style={styles.countryItemCode}>{item.code}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+function SixDigitOTP({ value, onComplete, disabled }) {
+  const [digits, setDigits] = useState(Array(6).fill(""));
+  const inputRefs = useRef([]);
+
+  useEffect(() => {
+    if (!value) {
+      setDigits(Array(6).fill(""));
+      return;
+    }
+    if (value.length === 6) setDigits(value.split(""));
+  }, [value]);
+
+  const onChangeDigit = (index, text) => {
+    if (!/^[0-9]?$/.test(text)) return;
+    const next = [...digits];
+    next[index] = text;
+    setDigits(next);
+    if (text && index < 5) inputRefs.current[index + 1]?.focus();
+    const joined = next.join("");
+    onComplete(joined.length === 6 ? joined : "");
+  };
+
+  return (
+    <View style={styles.otpWrap}>
+      {digits.map((d, index) => (
+        <TextInput
+          key={`${index}`}
+          ref={(el) => {
+            inputRefs.current[index] = el;
+          }}
+          value={d}
+          onChangeText={(text) => onChangeDigit(index, text)}
+          style={[styles.otpInput, d ? styles.otpInputFilled : null]}
+          keyboardType="number-pad"
+          maxLength={1}
+          editable={!disabled}
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function LoginPage({ navigation }) {
-  const { theme, isDark } = useTheme();
   const { signIn } = useAuth();
+
   const [mode, setMode] = useState("password");
   const [authMethod, setAuthMethod] = useState("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  
+  const [loading, setLoading] = useState(false);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const slideAnim = useRef(new Animated.Value(32)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 500,
         useNativeDriver: true,
       }),
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 0,
-        tension: 20,
-        friction: 7,
+        duration: 500,
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   useEffect(() => {
-    let interval;
-    if (resendTimer > 0)
-      interval = setInterval(() => setResendTimer((p) => p - 1), 1000);
+    if (resendTimer <= 0) return undefined;
+    const interval = setInterval(() => setResendTimer((prev) => prev - 1), 1000);
     return () => clearInterval(interval);
   }, [resendTimer]);
 
@@ -198,640 +204,645 @@ export default function LoginPage({ navigation }) {
     Toast.show({ type, text1: title, text2: message, position: "top" });
   };
 
+  const extractAuthPayload = (response) => {
+    const body = response?.data || {};
+    const nested = body?.data && typeof body.data === "object" ? body.data : {};
+
+    return {
+      token: body?.rsToken || nested?.rsToken || body?.token || nested?.token || "",
+      userId: body?.userId || nested?.userId || "",
+      email: body?.email || nested?.email || email || "",
+    };
+  };
+
   const handlePasswordLogin = async () => {
-    if (!email || !password)
-      return showToast("error", "Error", "Email and password required.");
+    if (!email || !password) {
+      showToast("error", "Error", "Email and password required.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await axios.post(`${baseURL}/signIn`, { email, password });
-  // Persist token and update app state through Auth context
-  await AsyncStorage.setItem("roomsstayUserEmail", res.data.email || "");
-  await signIn(res.data.rsToken, res.data.userId);
+      const authData = extractAuthPayload(res);
+      if (!authData.token || !authData.userId) {
+        throw new Error("Login response is missing token or userId.");
+      }
+      await signIn(authData.token, authData.userId, authData.email);
       showToast("success", "Success", "Logged in");
       navigation.replace("MainTabs");
     } catch (err) {
-      showToast(
-        "error",
-        "Login Failed",
-        err.response?.data?.message || "Login failed."
-      );
+      showToast("error", "Login Failed", err.response?.data?.message || "Login failed.");
     } finally {
       setLoading(false);
     }
   };
 
   const requestOtp = async () => {
-    if (authMethod === "email" && !email)
-      return showToast("error", "Error", "Please enter your email.");
-    if (authMethod === "mobile" && !phone)
-      return showToast("error", "Error", "Please enter your mobile number.");
+    if (authMethod === "email" && !email) {
+      showToast("error", "Error", "Please enter your email.");
+      return;
+    }
+
+    if (authMethod === "mobile" && !phone) {
+      showToast("error", "Error", "Please enter your mobile number.");
+      return;
+    }
+
     setLoading(true);
     try {
-      let res;
-      if (authMethod === "email")
-        res = await axios.post(`${baseURL}/mail/send-otp`, { email });
-      else {
-        const full = countryCode + phone;
-        res = await axios.post(`${baseURL}/send-otp`, {
-          phoneNumber: full,
-          mobile: full,
+      let response;
+      if (authMethod === "email") {
+        response = await axios.post(`${baseURL}/mail/send-otp`, { email });
+      } else {
+        const fullPhone = `${countryCode}${phone}`;
+        response = await axios.post(`${baseURL}/send-otp`, {
+          phoneNumber: fullPhone,
+          mobile: fullPhone,
         });
       }
-      showToast("success", "OTP Sent", res.data.message || "OTP sent successfully.");
+      showToast("success", "OTP Sent", response.data?.message || "OTP sent successfully.");
       setOtpSent(true);
       setResendTimer(30);
     } catch (err) {
-      showToast(
-        "error",
-        "Error",
-        err.response?.data?.message || "Could not send OTP."
-      );
+      showToast("error", "Error", err.response?.data?.message || "Could not send OTP.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOtpSubmit = async () => {
-    if (!otp) return showToast("error", "Error", "Please enter the OTP.");
+  const verifyOtp = async () => {
+    if (!otp || otp.length !== 6) {
+      showToast("error", "Error", "Please enter a valid OTP.");
+      return;
+    }
+
     setLoading(true);
     try {
-      let res;
-      if (authMethod === "email")
-        res = await axios.post(`${baseURL}/mail/verify-otp/site`, {
-          email,
-          otp,
-        });
-      else {
-        const full = countryCode + phone;
-        res = await axios.post(`${baseURL}/verify-otp`, {
-          phoneNumber: full,
-          mobile: full,
+      let response;
+      if (authMethod === "email") {
+        response = await axios.post(`${baseURL}/mail/verify-otp/site`, { email, otp });
+      } else {
+        const fullPhone = `${countryCode}${phone}`;
+        response = await axios.post(`${baseURL}/verify-otp`, {
+          phoneNumber: fullPhone,
+          mobile: fullPhone,
           code: otp,
         });
       }
-  await signIn(res.data.rsToken, res.data.userId);
+
+      const authData = extractAuthPayload(response);
+      if (!authData.token || !authData.userId) {
+        throw new Error("OTP response is missing token or userId.");
+      }
+      await signIn(authData.token, authData.userId, authData.email);
       showToast("success", "Success", "Logged in");
       navigation.replace("MainTabs");
     } catch (err) {
-      showToast(
-        "error",
-        "Invalid OTP",
-        err.response?.data?.message || "Invalid OTP."
-      );
+      showToast("error", "Invalid OTP", err.response?.data?.message || "Invalid OTP.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = () => {
-    if (mode === "password") handlePasswordLogin();
-    else if (otpSent) handleOtpSubmit();
-    else requestOtp();
+  const onSubmit = () => {
+    if (mode === "password") {
+      handlePasswordLogin();
+      return;
+    }
+    if (!otpSent) requestOtp();
+    else verifyOtp();
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <LinearGradient
-        colors={isDark ? ['#0f172a', '#1e293b', '#334155'] : ['#dbeafe', '#eff6ff', '#f8fafc']}
-        style={styles.gradient}
-      >
-        <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.keyboardView}
+    <View style={styles.screen}>
+      <PatternBackground />
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <ScrollView
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+            <Animated.View
+              style={[
+                styles.content,
+                { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+              ]}
             >
-              <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-                {/* Logo & Welcome */}
-                <View style={styles.header}>
-                  <View style={[styles.logoContainer, { backgroundColor: theme.activeBg }]}>
-                    <MaterialCommunityIcons name="home-heart" size={48} color="#fff" />
-                  </View>
-                  <Text style={[styles.title, { color: theme.text }]}>Welcome to HRS</Text>
-                  <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                    Your journey starts here
-                  </Text>
-                </View>
+              <View style={styles.hero}>
+                <Text style={styles.brandWordmark}>Hotelroomsstay</Text>
+                <Text style={styles.heroTitle}>Welcome to HRS</Text>
+                <Text style={styles.heroSubtitle}>Your journey starts here</Text>
+              </View>
 
-                {/* Login Card */}
-                <BlurView intensity={isDark ? 60 : 90} tint={theme.blurTint} style={styles.card}>
-                  <View style={[styles.cardInner, { backgroundColor: isDark ? 'rgba(30,41,59,0.7)' : 'rgba(255,255,255,0.7)' }]}>
-                    
-                    {/* Mode Tabs */}
-                    <View style={styles.modeTabs}>
-                      <TouchableOpacity
-                        onPress={() => { setMode("password"); setOtpSent(false); }}
-                        style={[styles.modeTab, mode === "password" && styles.modeTabActive]}
-                      >
-                        <Ionicons 
-                          name="key" 
-                          size={18} 
-                          color={mode === "password" ? "#fff" : theme.textSecondary} 
-                        />
-                        <Text style={[styles.modeTabText, { color: mode === "password" ? "#fff" : theme.textSecondary }]}>
-                          Password
-                        </Text>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity
-                        onPress={() => { setMode("otp"); setOtpSent(false); }}
-                        style={[styles.modeTab, mode === "otp" && styles.modeTabActive]}
-                      >
-                        <Ionicons 
-                          name="phone-portrait" 
-                          size={18} 
-                          color={mode === "otp" ? "#fff" : theme.textSecondary} 
-                        />
-                        <Text style={[styles.modeTabText, { color: mode === "otp" ? "#fff" : theme.textSecondary }]}>
-                          OTP
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Auth Method Toggle for OTP */}
-                    {mode === "otp" && !otpSent && (
-                      <View style={styles.authMethodContainer}>
-                        <TouchableOpacity
-                          onPress={() => setAuthMethod("email")}
-                          style={[styles.authMethodBtn, authMethod === "email" && { backgroundColor: theme.activeColor }]}
-                        >
-                          <Text style={[styles.authMethodText, { color: authMethod === "email" ? "#fff" : theme.textSecondary }]}>
-                            Email
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => setAuthMethod("mobile")}
-                          style={[styles.authMethodBtn, authMethod === "mobile" && { backgroundColor: theme.activeColor }]}
-                        >
-                          <Text style={[styles.authMethodText, { color: authMethod === "mobile" ? "#fff" : theme.textSecondary }]}>
-                            Mobile
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-
-                    {/* Email Input */}
-                    {(mode === "password" || authMethod === "email") && (
-                      <View style={styles.inputGroup}>
-                        <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: isDark ? '#334155' : '#e2e8f0' }]}>
-                          <Ionicons name="mail" size={20} color={theme.iconColor} style={styles.inputIcon} />
-                          <TextInput
-                            placeholder="Email address"
-                            value={email}
-                            onChangeText={setEmail}
-                            editable={!(mode === "otp" && otpSent)}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            style={[styles.input, { color: theme.text }]}
-                            placeholderTextColor={theme.textSecondary}
-                          />
-                        </View>
-                      </View>
-                    )}
-
-                    {/* Mobile Input */}
-                    {mode === "otp" && authMethod === "mobile" && (
-                      <View style={styles.inputGroup}>
-                        <View style={styles.phoneInputRow}>
-                          <CountryCodeDropdown
-                            selectedCode={countryCode}
-                            onSelect={setCountryCode}
-                            disabled={otpSent}
-                            isDark={isDark}
-                          />
-                          <View style={[styles.inputContainer, styles.phoneInput, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: isDark ? '#334155' : '#e2e8f0' }]}>
-                            <Ionicons name="call" size={20} color={theme.iconColor} style={styles.inputIcon} />
-                            <TextInput
-                              placeholder="Mobile number"
-                              value={phone}
-                              onChangeText={(t) => setPhone(t.replace(/[^\d]/g, ""))}
-                              editable={!otpSent}
-                              keyboardType="phone-pad"
-                              style={[styles.input, { color: theme.text }]}
-                              placeholderTextColor={theme.textSecondary}
-                            />
-                          </View>
-                        </View>
-                      </View>
-                    )}
-
-                    {/* Password Input */}
-                    {mode === "password" && (
-                      <View style={styles.inputGroup}>
-                        <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: isDark ? '#334155' : '#e2e8f0' }]}>
-                          <Ionicons name="lock-closed" size={20} color={theme.iconColor} style={styles.inputIcon} />
-                          <TextInput
-                            placeholder="Password"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry={!showPassword}
-                            style={[styles.input, { color: theme.text }]}
-                            placeholderTextColor={theme.textSecondary}
-                          />
-                          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                            <Ionicons 
-                              name={showPassword ? "eye-off" : "eye"} 
-                              size={20} 
-                              color={theme.iconColor} 
-                            />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-
-                    {/* OTP Input */}
-                    {mode === "otp" && otpSent && (
-                      <View style={styles.inputGroup}>
-                        <Text style={[styles.otpLabel, { color: theme.text }]}>
-                          Enter 6-digit code
-                        </Text>
-                        <SixDigitOTP
-                          disabled={loading}
-                          onComplete={setOtp}
-                          value={otp}
-                          isDark={isDark}
-                        />
-                      </View>
-                    )}
-
-                    {/* Submit Button */}
-                    <TouchableOpacity
-                      onPress={handleSubmit}
-                      disabled={loading || (mode === "otp" && otpSent && otp.length !== 6)}
+              <View style={styles.card}>
+                <View style={styles.modeSwitch}>
+                  <TouchableOpacity
+                    style={[styles.modeButton, mode === "password" && styles.modeButtonActive]}
+                    onPress={() => {
+                      setMode("password");
+                      setOtpSent(false);
+                    }}
+                  >
+                    <Ionicons
+                      name="key"
+                      size={15}
+                      color={mode === "password" ? "#ffffff" : "#0f172a"}
+                    />
+                    <Text
                       style={[
-                        styles.submitButton,
-                        { backgroundColor: (loading || (mode === "otp" && otpSent && otp.length !== 6)) ? '#94a3b8' : theme.activeColor }
+                        styles.modeButtonText,
+                        mode === "password" && styles.modeButtonTextActive,
                       ]}
                     >
-                      {loading ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <>
-                          <Text style={styles.submitButtonText}>
-                            {mode === "password" ? "Sign In" : otpSent ? "Verify & Sign In" : "Send OTP"}
-                          </Text>
-                          <Ionicons name="arrow-forward" size={20} color="#fff" />
-                        </>
-                      )}
-                    </TouchableOpacity>
+                      Password
+                    </Text>
+                  </TouchableOpacity>
 
-                    {/* Resend Timer */}
-                    {mode === "otp" && otpSent && (
-                      <View style={styles.resendContainer}>
-                        {resendTimer > 0 ? (
-                          <Text style={[styles.resendText, { color: theme.textSecondary }]}>
-                            Resend code in <Text style={{ color: theme.activeColor, fontWeight: 'bold' }}>{resendTimer}s</Text>
-                          </Text>
-                        ) : (
-                          <TouchableOpacity onPress={requestOtp}>
-                            <Text style={[styles.resendLink, { color: theme.activeColor }]}>
-                              Resend code
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-
-                    {/* Divider */}
-                    <View style={styles.divider}>
-                      <View style={[styles.dividerLine, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]} />
-                      <Text style={[styles.dividerText, { color: theme.textSecondary }]}>OR</Text>
-                      <View style={[styles.dividerLine, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]} />
-                    </View>
-
-                    {/* Sign Up Link */}
-                    <TouchableOpacity 
-                      onPress={() => navigation.navigate("Register")}
-                      style={styles.signupLink}
+                  <TouchableOpacity
+                    style={[styles.modeButton, mode === "otp" && styles.modeButtonActive]}
+                    onPress={() => {
+                      setMode("otp");
+                      setOtpSent(false);
+                    }}
+                  >
+                    <Ionicons
+                      name="phone-portrait"
+                      size={15}
+                      color={mode === "otp" ? "#ffffff" : "#0f172a"}
+                    />
+                    <Text
+                      style={[styles.modeButtonText, mode === "otp" && styles.modeButtonTextActive]}
                     >
-                      <Text style={[styles.signupText, { color: theme.textSecondary }]}>
-                        Don't have an account?{" "}
-                        <Text style={[styles.signupLinkText, { color: theme.activeColor }]}>
-                          Create one
-                        </Text>
+                      OTP
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {mode === "otp" && !otpSent && (
+                  <View style={styles.subSwitch}>
+                    <TouchableOpacity
+                      style={[styles.subSwitchButton, authMethod === "email" && styles.subSwitchActive]}
+                      onPress={() => setAuthMethod("email")}
+                    >
+                      <Text
+                        style={[
+                          styles.subSwitchText,
+                          authMethod === "email" && styles.subSwitchTextActive,
+                        ]}
+                      >
+                        Email
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.subSwitchButton, authMethod === "mobile" && styles.subSwitchActive]}
+                      onPress={() => setAuthMethod("mobile")}
+                    >
+                      <Text
+                        style={[
+                          styles.subSwitchText,
+                          authMethod === "mobile" && styles.subSwitchTextActive,
+                        ]}
+                      >
+                        Mobile
                       </Text>
                     </TouchableOpacity>
                   </View>
-                </BlurView>
+                )}
 
-                {/* Footer */}
-                <View style={styles.footer}>
-                  <Text style={[styles.footerText, { color: theme.textSecondary }]}>
-                    By continuing, you agree to our Terms & Privacy Policy
-                  </Text>
+                {(mode === "password" || authMethod === "email") && (
+                  <View style={styles.inputWrap}>
+                    <Ionicons name="mail" size={20} color="#0f2c5c" style={styles.inputIcon} />
+                    <TextInput
+                      value={email}
+                      onChangeText={setEmail}
+                      editable={!(mode === "otp" && otpSent)}
+                      placeholder="Email address"
+                      placeholderTextColor="#64748b"
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      style={styles.input}
+                    />
+                  </View>
+                )}
+
+                {mode === "otp" && authMethod === "mobile" && (
+                  <View style={styles.phoneRow}>
+                    <CountryCodePicker
+                      selectedCode={countryCode}
+                      onSelect={setCountryCode}
+                      disabled={otpSent}
+                    />
+                    <View style={[styles.inputWrap, styles.phoneInputWrap]}>
+                      <Ionicons name="call" size={20} color="#0f2c5c" style={styles.inputIcon} />
+                      <TextInput
+                        value={phone}
+                        onChangeText={(text) => setPhone(text.replace(/[^\d]/g, ""))}
+                        editable={!otpSent}
+                        placeholder="Mobile number"
+                        placeholderTextColor="#64748b"
+                        keyboardType="phone-pad"
+                        style={styles.input}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {mode === "password" && (
+                  <View style={styles.inputWrap}>
+                    <Ionicons name="lock-closed" size={20} color="#0f2c5c" style={styles.inputIcon} />
+                    <TextInput
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      placeholder="Password"
+                      placeholderTextColor="#64748b"
+                      style={styles.input}
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)}>
+                      <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#0f2c5c" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {mode === "otp" && otpSent && (
+                  <View style={styles.otpSection}>
+                    <Text style={styles.otpHeading}>Enter 6-digit code</Text>
+                    <SixDigitOTP disabled={loading} value={otp} onComplete={setOtp} />
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={styles.submitTouchable}
+                  onPress={onSubmit}
+                  disabled={loading || (mode === "otp" && otpSent && otp.length !== 6)}
+                >
+                  <LinearGradient
+                    colors={["#245ecf", "#3f73df"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[
+                      styles.submitButton,
+                      loading || (mode === "otp" && otpSent && otp.length !== 6)
+                        ? styles.submitButtonDisabled
+                        : null,
+                    ]}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#ffffff" />
+                    ) : (
+                      <>
+                        <Text style={styles.submitButtonText}>
+                          {mode === "password" ? "Sign In" : otpSent ? "Verify & Sign In" : "Send OTP"}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={20} color="#ffffff" />
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {mode === "otp" && otpSent && (
+                  <View style={styles.resendWrap}>
+                    {resendTimer > 0 ? (
+                      <Text style={styles.resendText}>Resend code in {resendTimer}s</Text>
+                    ) : (
+                      <TouchableOpacity onPress={requestOtp}>
+                        <Text style={styles.resendLink}>Resend code</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>OR</Text>
+                  <View style={styles.dividerLine} />
                 </View>
-              </Animated.View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </LinearGradient>
-      <Toast />
+
+                <TouchableOpacity onPress={() => navigation.navigate("Register")}>
+                  <Text style={styles.bottomText}>
+                    Don't have an account? <Text style={styles.bottomLink}>Create one</Text>
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  flex: {
     flex: 1,
   },
-  gradient: {
+  screen: {
     flex: 1,
+    backgroundColor: "#f3f4f6",
   },
   safeArea: {
     flex: 1,
   },
-  keyboardView: {
-    flex: 1,
+  patternIcon: {
+    position: "absolute",
+    opacity: 0.16,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 30,
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    justifyContent: "center",
   },
   content: {
-    flex: 1,
-    justifyContent: 'center',
+    alignItems: "center",
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 30,
+  hero: {
+    alignItems: "center",
+    marginBottom: 10,
   },
-  logoContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+  brandWordmark: {
+    color: "#1d4ed8",
+    fontSize: 30,
+    lineHeight: 34,
+    marginBottom: 4,
+    fontWeight: "700",
+    fontStyle: "italic",
+    fontFamily: Platform.select({ ios: "Snell Roundhand", android: "cursive", default: "cursive" }),
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
+  heroTitle: {
     fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
+    color: "#0f2757",
+  },
+  heroSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#334155",
+    fontWeight: "500",
   },
   card: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  cardInner: {
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 24,
-  },
-  modeTabs: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  modeTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(100, 116, 139, 0.1)',
-  },
-  modeTabActive: {
-    backgroundColor: '#2563eb',
-  },
-  modeTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  authMethodContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  authMethodBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(100, 116, 139, 0.1)',
-  },
-  authMethodText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
+    width: "100%",
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.96)",
     borderWidth: 1.5,
-    paddingHorizontal: 16,
-    height: 54,
+    borderColor: "#5f8fcf",
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
+    shadowColor: "#1e3a8a",
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  modeSwitch: {
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: "#81a2d1",
+    backgroundColor: "#f8fafc",
+    flexDirection: "row",
+    padding: 4,
+    marginBottom: 10,
+  },
+  modeButton: {
+    flex: 1,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  modeButtonActive: {
+    backgroundColor: "#3568d4",
+    shadowColor: "#1d4ed8",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  modeButtonText: {
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  modeButtonTextActive: {
+    color: "#ffffff",
+  },
+  subSwitch: {
+    flexDirection: "row",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  subSwitchButton: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    backgroundColor: "#f8fafc",
+  },
+  subSwitchActive: {
+    backgroundColor: "#e0e7ff",
+  },
+  subSwitchText: {
+    color: "#475569",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  subSwitchTextActive: {
+    color: "#1e40af",
+  },
+  phoneRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+  countryButton: {
+    width: 74,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1.3,
+    borderColor: "#5f8fcf",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+  },
+  countryButtonDisabled: {
+    opacity: 0.65,
+  },
+  countryButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  countryModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  countryModal: {
+    borderRadius: 16,
+    backgroundColor: "#ffffff",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+  },
+  countryModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  countryModalTitle: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  countryItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  countryItemName: {
+    color: "#334155",
+    fontSize: 15,
+  },
+  countryItemCode: {
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  inputWrap: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1.3,
+    borderColor: "#5f8fcf",
+    backgroundColor: "#ffffff",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  phoneInputWrap: {
+    flex: 1,
+    marginBottom: 0,
   },
   inputIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   input: {
     flex: 1,
+    color: "#111827",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
-  eyeIcon: {
-    padding: 4,
+  otpSection: {
+    marginBottom: 8,
   },
-  phoneInputRow: {
-    flexDirection: 'row',
-    gap: 12,
+  otpHeading: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 6,
   },
-  phoneInput: {
-    flex: 1,
-  },
-  countryDropdown: {
-    width: 80,
-  },
-  countryButton: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countryCode: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  modalBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: height * 0.7,
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  searchInput: {
-    marginHorizontal: 20,
-    marginVertical: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    fontSize: 15,
-    borderWidth: 1,
-  },
-  countryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-  },
-  countryFlag: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  countryName: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  countryCodeText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  emptyText: {
-    textAlign: 'center',
-    paddingVertical: 20,
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  otpLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
+  otpWrap: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 7,
   },
   otpInput: {
-    width: 48,
-    height: 56,
-    borderRadius: 12,
-    textAlign: 'center',
-    fontSize: 20,
-    fontWeight: 'bold',
-    borderWidth: 2,
+    width: 38,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1.3,
+    borderColor: "#cbd5e1",
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0f172a",
+    backgroundColor: "#ffffff",
   },
   otpInputFilled: {
-    backgroundColor: '#dbeafe',
-    borderColor: '#2563eb',
-    color: '#1e40af',
+    borderColor: "#3568d4",
+    backgroundColor: "#eef2ff",
   },
-  otpInputEmpty: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0',
-    color: '#0f172a',
-  },
-  otpInputEmptyDark: {
-    backgroundColor: '#1e293b',
-    borderColor: '#334155',
-    color: '#f1f5f9',
+  submitTouchable: {
+    marginTop: 2,
   },
   submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 46,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
     gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
-    marginTop: 8,
-    shadowColor: '#2563eb',
+    shadowColor: "#1d4ed8",
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    elevation: 4,
+  },
+  submitButtonDisabled: {
+    opacity: 0.55,
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "800",
   },
-  resendContainer: {
-    alignItems: 'center',
-    marginTop: 16,
+  resendWrap: {
+    marginTop: 8,
+    alignItems: "center",
   },
   resendText: {
-    fontSize: 14,
+    color: "#475569",
+    fontSize: 13,
   },
   resendLink: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: "#245ecf",
+    fontSize: 13,
+    fontWeight: "700",
   },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
+  dividerRow: {
+    marginTop: 12,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   dividerLine: {
     flex: 1,
     height: 1,
+    backgroundColor: "#cbd5e1",
   },
   dividerText: {
-    marginHorizontal: 16,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  signupLink: {
-    alignItems: 'center',
-  },
-  signupText: {
+    color: "#374151",
     fontSize: 14,
+    fontWeight: "700",
   },
-  signupLinkText: {
-    fontWeight: 'bold',
+  bottomText: {
+    textAlign: "center",
+    color: "#334155",
+    fontSize: 14,
+    fontWeight: "500",
   },
-  footer: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-    textAlign: 'center',
+  bottomLink: {
+    color: "#245ecf",
+    fontWeight: "800",
   },
 });

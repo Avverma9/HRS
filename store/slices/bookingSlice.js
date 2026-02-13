@@ -1,192 +1,245 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../utils/api";
+import Toast from "react-native-toast-message";
+import { getUserId } from "../../utils/credentials";
 
-// Fetch Monthly Pricing Data (Optional, based on MD)
+const parseNumber = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^\d.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const normalizeResponse = (response) => {
+  const payload = response?.data;
+  if (!payload) return null;
+
+  if (payload?.data && typeof payload.data === "object") {
+    return { ...payload.data, message: payload.message || payload.data?.message };
+  }
+  return payload;
+};
+
+const stripHtmlField = (payload) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  const { html, ...rest } = payload;
+  return rest;
+};
+
 export const fetchMonthlyData = createAsyncThunk(
   "booking/fetchMonthlyData",
   async (hotelId, { rejectWithValue }) => {
     try {
-      // Monthly price override data
-      const response = await api.get(`/monthly-set-room-price/get/by/${hotelId}`);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      const res = await api.get(`/monthly-set-room-price/get/by/${hotelId}`);
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err?.response?.data?.message || err?.message || "Failed");
     }
   }
 );
 
-// Apply Coupon Code
 export const applyCouponCode = createAsyncThunk(
   "booking/applyCouponCode",
   async (payload, { rejectWithValue }) => {
     try {
-      const response = await api.patch("/user-coupon/apply/a/coupon-to-room/user", payload);
-      return response.data;
-    } catch (error) {
-      const message =
-        error.response?.data?.message || error.message || "Unable to apply coupon";
+      const res = await api.patch("/user-coupon/apply/a/coupon-to-room/user", payload);
+      const parsed = normalizeResponse(res);
+
+      Toast.show({
+        type: "success",
+        text1: parsed?.message || "Coupon applied successfully",
+      });
+
+      return parsed;
+    } catch (err) {
+      const message = err?.response?.data?.message || err?.message || "Unable to apply coupon";
+      Toast.show({ type: "error", text1: message });
       return rejectWithValue(message);
     }
   }
 );
 
-// Get GST for Hotel
 export const getGstForHotelData = createAsyncThunk(
   "booking/getGstForHotelData",
   async ({ type = "Hotel", gstThreshold }, { rejectWithValue }) => {
     try {
       const params = new URLSearchParams();
       if (type) params.append("type", type);
+
       if (gstThreshold !== undefined && gstThreshold !== null) {
-        const thresholdValue = Array.isArray(gstThreshold)
-          ? gstThreshold.join(",")
-          : gstThreshold;
-        params.append("gstThreshold", thresholdValue);
+        params.append(
+          "gstThreshold",
+          Array.isArray(gstThreshold) ? gstThreshold.join(",") : String(gstThreshold)
+        );
       }
 
-      const response = await api.get(`/gst/get-single-gst?${params.toString()}`);
-      return response.data;
-    } catch (error) {
-      const message =
-        error.response?.data?.message || error.message || "Unable to fetch GST data";
+      const res = await api.get(`/gst/get-single-gst?${params.toString()}`);
+      return res.data;
+    } catch (err) {
+      const message = err?.response?.data?.message || err?.message || "Unable to fetch GST data";
       return rejectWithValue(message);
     }
   }
 );
 
-// Create Booking
 export const createBooking = createAsyncThunk(
   "booking/createBooking",
   async (bookingPayload, { rejectWithValue }) => {
     try {
-      const response = await api.post("/booking/create", bookingPayload);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      const res = await api.post("/booking/create", bookingPayload);
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err?.response?.data?.message || err?.message || "Failed");
     }
   }
 );
 
-// Verify Coupon
-export const verifyCoupon = createAsyncThunk(
-  "booking/verifyCoupon",
-  async ({ code, hotelId, totalAmount }, { rejectWithValue }) => {
+export const fetchFilteredBooking = createAsyncThunk(
+  "booking/fetchFilteredBooking",
+  async (filters = {}, { rejectWithValue }) => {
     try {
-      const response = await api.post("/coupons/verify", { code, hotelId, totalAmount });
-      return response.data; // Should return discount amount or percentage
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      const resolvedUserId = filters?.userId || (await getUserId());
+
+      const params = new URLSearchParams();
+      Object.entries({ ...filters, userId: resolvedUserId }).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") params.append(k, String(v));
+      });
+
+      const relativeUrl = `/get/all/users-filtered/booking/by?${params.toString()}`;
+
+    
+
+      const res = await api.get(relativeUrl);
+
+    
+
+      const raw = res?.data ?? null;
+
+   
+
+      const { html, ...sanitized } = raw || {};
+   
+
+      return sanitized;
+    } catch (err) {
+     
+
+      return rejectWithValue(
+        err?.response?.data?.message || err?.message || "Failed to fetch bookings"
+      );
     }
   }
 );
+
+
+const initialState = {
+  monthlyData: [],
+  monthlyLoading: false,
+  monthlyError: null,
+
+  gstStatus: "idle",
+  gstError: null,
+  gstAmount: 0,
+  gstData: null,
+
+  bookingStatus: "idle",
+  bookingError: null,
+  bookingReference: null,
+
+  couponStatus: "idle",
+  couponError: null,
+  discountAmount: 0,
+  appliedCoupon: null,
+  couponResult: null,
+
+  filteredBookingsStatus: "idle",
+  filteredBookingsError: null,
+  filteredBookings: null,
+};
 
 const bookingSlice = createSlice({
   name: "booking",
-  initialState: {
-    monthlyData: [],
-    monthlyLoading: false,
-    monthlyError: null,
-
-    gstStatus: "idle",
-    gstError: null,
-    gstAmount: 0,
-    gstData: null,
-    
-    bookingStatus: 'idle', // idle | loading | succeeded | failed
-    bookingError: null,
-    bookingReference: null,
-
-    couponStatus: 'idle',
-    couponError: null,
-    discountAmount: 0,
-    appliedCoupon: null,
-  },
+  initialState,
   reducers: {
-    resetBookingState: (state) => {
-      state.bookingStatus = 'idle';
+    resetBookingState(state) {
+      state.bookingStatus = "idle";
       state.bookingError = null;
       state.bookingReference = null;
     },
-    resetCoupon: (state) => {
-      state.couponStatus = 'idle';
+    resetCoupon(state) {
+      state.couponStatus = "idle";
       state.couponError = null;
       state.discountAmount = 0;
       state.appliedCoupon = null;
-    }
+      state.couponResult = null;
+    },
+    resetFilteredBookings(state) {
+      state.filteredBookingsStatus = "idle";
+      state.filteredBookingsError = null;
+      state.filteredBookings = null;
+    },
   },
   extraReducers: (builder) => {
     builder
-      // Monthly Data
       .addCase(fetchMonthlyData.pending, (state) => {
         state.monthlyLoading = true;
+        state.monthlyError = null;
       })
       .addCase(fetchMonthlyData.fulfilled, (state, action) => {
         state.monthlyLoading = false;
-        console.log("📦 Monthly Data RAW payload:", JSON.stringify(action.payload, null, 2));
-        // Handle array directly or wrapped in data property
         const payloadData = action.payload?.data || action.payload;
-        console.log("📦 Monthly Data PARSED:", JSON.stringify(payloadData, null, 2));
         state.monthlyData = Array.isArray(payloadData) ? payloadData : [];
-        console.log("📦 Monthly Data STORED (length):", state.monthlyData.length);
       })
       .addCase(fetchMonthlyData.rejected, (state, action) => {
         state.monthlyLoading = false;
-        state.monthlyError = action.payload;
+        state.monthlyError = action.payload || "Failed";
       })
-      
-      // Create Booking
+
       .addCase(createBooking.pending, (state) => {
-        state.bookingStatus = 'loading';
+        state.bookingStatus = "loading";
         state.bookingError = null;
       })
       .addCase(createBooking.fulfilled, (state, action) => {
-        state.bookingStatus = 'succeeded';
-        state.bookingReference = action.payload?.bookingId || action.payload?.data?.bookingId;
+        state.bookingStatus = "succeeded";
+        state.bookingReference = action.payload?.bookingId || action.payload?.data?.bookingId || null;
       })
       .addCase(createBooking.rejected, (state, action) => {
-        state.bookingStatus = 'failed';
-        state.bookingError = action.payload;
+        state.bookingStatus = "failed";
+        state.bookingError = action.payload || "Failed";
       })
 
-      // Coupon
-      .addCase(verifyCoupon.pending, (state) => {
-        state.couponStatus = 'loading';
-        state.couponError = null;
-      })
-      .addCase(verifyCoupon.fulfilled, (state, action) => {
-        state.couponStatus = 'succeeded';
-        state.discountAmount = action.payload?.discountAmount || 0;
-        state.appliedCoupon = action.meta.arg.code;
-      })
-      .addCase(verifyCoupon.rejected, (state, action) => {
-        state.couponStatus = 'failed';
-        state.couponError = action.payload;
-        state.discountAmount = 0;
-        state.appliedCoupon = null;
-      })
-
-      // Apply Coupon
       .addCase(applyCouponCode.pending, (state) => {
         state.couponStatus = "loading";
         state.couponError = null;
       })
       .addCase(applyCouponCode.fulfilled, (state, action) => {
         state.couponStatus = "succeeded";
-        state.discountAmount =
-          action.payload?.discountPrice ||
-          action.payload?.discountAmount ||
-          0;
-        state.appliedCoupon =
-          action.meta.arg?.couponCode || action.meta.arg?.code || null;
+
+        const originalPrice = parseNumber(action.payload?.originalPrice);
+        const finalPrice = parseNumber(action.payload?.finalPrice);
+
+        const explicitDiscount =
+          parseNumber(action.payload?.discountPrice) || parseNumber(action.payload?.discountAmount);
+
+        const derivedDiscount =
+          originalPrice > 0 && finalPrice >= 0 && originalPrice >= finalPrice
+            ? originalPrice - finalPrice
+            : 0;
+
+        state.discountAmount = explicitDiscount || derivedDiscount || 0;
+        state.appliedCoupon = action.meta.arg?.couponCode || action.meta.arg?.code || null;
+        state.couponResult = action.payload || null;
       })
       .addCase(applyCouponCode.rejected, (state, action) => {
-        state.couponStatus = "failed"; 
-        state.couponError = action.payload;
+        state.couponStatus = "failed";
+        state.couponError = action.payload || "Failed";
         state.discountAmount = 0;
         state.appliedCoupon = null;
+        state.couponResult = null;
       })
 
-      // GST
       .addCase(getGstForHotelData.pending, (state) => {
         state.gstStatus = "loading";
         state.gstError = null;
@@ -194,18 +247,28 @@ const bookingSlice = createSlice({
       .addCase(getGstForHotelData.fulfilled, (state, action) => {
         state.gstStatus = "succeeded";
         state.gstData = action.payload?.data || action.payload || null;
-        state.gstAmount =
-          action.payload?.gstAmount ||
-          action.payload?.data?.gstAmount ||
-          0;
+        state.gstAmount = action.payload?.gstAmount || action.payload?.data?.gstAmount || 0;
       })
       .addCase(getGstForHotelData.rejected, (state, action) => {
         state.gstStatus = "failed";
-        state.gstError = action.payload;
+        state.gstError = action.payload || "Failed";
         state.gstAmount = 0;
+      })
+
+      .addCase(fetchFilteredBooking.pending, (state) => {
+        state.filteredBookingsStatus = "loading";
+        state.filteredBookingsError = null;
+      })
+      .addCase(fetchFilteredBooking.fulfilled, (state, action) => {
+        state.filteredBookingsStatus = "succeeded";
+        state.filteredBookings = action.payload || null;
+      })
+      .addCase(fetchFilteredBooking.rejected, (state, action) => {
+        state.filteredBookingsStatus = "failed";
+        state.filteredBookingsError = action.payload || "Failed to fetch bookings";
       });
   },
 });
 
-export const { resetBookingState, resetCoupon } = bookingSlice.actions;
+export const { resetBookingState, resetCoupon, resetFilteredBookings } = bookingSlice.actions;
 export default bookingSlice.reducer;

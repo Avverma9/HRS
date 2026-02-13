@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearAuthSession, saveAuthSession } from '../utils/credentials';
 
 const AuthContext = createContext();
 
@@ -21,15 +22,13 @@ export function AuthProvider({ children }) {
     return () => (mounted = false);
   }, []);
 
-  const signIn = async (token, userId) => {
-    await AsyncStorage.setItem('rsToken', token);
-    await AsyncStorage.setItem('rsUserId', userId);
+  const signIn = async (token, userId, email) => {
+    await saveAuthSession({ token, userId, email });
     setIsSignedIn(true);
   };
 
   const signOut = async () => {
-    await AsyncStorage.removeItem('rsToken');
-    await AsyncStorage.removeItem('rsUserId');
+    await clearAuthSession();
     setIsSignedIn(false);
   };
 

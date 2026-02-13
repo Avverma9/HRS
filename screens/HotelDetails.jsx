@@ -25,10 +25,13 @@ import { getHotelById } from "../store/slices/hotelSlice";
 import {
   createBooking,
   resetBookingState,
+  applyCouponCode,
+  resetCoupon,
   fetchMonthlyData,
   getGstForHotelData,
 } from "../store/slices/bookingSlice";
 import { getUserId } from "../utils/credentials";
+import { getAmenityDisplayName, getAmenityIconName } from "../utils/amenities";
 
 /**
  * ✅ What this version fixes/does:
@@ -46,6 +49,13 @@ import { getUserId } from "../utils/credentials";
  */
 
 const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
+const MAX_GUESTS = 20;
+const MAX_ROOMS = 10;
+const MAX_GUESTS_PER_ROOM = 3;
+const getRequiredRoomsForGuests = (guests) => {
+  const normalizedGuests = clamp(Number(guests) || 1, 1, MAX_GUESTS);
+  return Math.max(1, Math.ceil(normalizedGuests / MAX_GUESTS_PER_ROOM));
+};
 
 const parseNumber = (v) => {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -171,42 +181,6 @@ const SectionTitle = ({ title, right }) => (
   </View>
 );
 
-const Stepper = ({ label, value, onDec, onInc, min, max, subtitle }) => (
-  <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm mb-4">
-    <View className="flex-row justify-between items-center">
-      <View>
-        <Text className="text-sm font-extrabold text-slate-900">{label}</Text>
-        {!!subtitle && <Text className="text-xs text-slate-500 mt-0.5">{subtitle}</Text>}
-      </View>
-      <View className="flex-row items-center">
-        <TouchableOpacity
-          onPress={onDec}
-          disabled={value <= min}
-          className={`w-10 h-10 rounded-xl items-center justify-center border ${
-            value <= min ? "bg-slate-100 border-slate-200" : "bg-white border-slate-200"
-          }`}
-        >
-          <Ionicons name="remove" size={18} color={value <= min ? "#94a3b8" : "#0f172a"} />
-        </TouchableOpacity>
-
-        <View className="w-12 items-center">
-          <Text className="text-base font-extrabold text-slate-900">{value}</Text>
-        </View>
-
-        <TouchableOpacity
-          onPress={onInc}
-          disabled={value >= max}
-          className={`w-10 h-10 rounded-xl items-center justify-center border ${
-            value >= max ? "bg-slate-100 border-slate-200" : "bg-white border-slate-200"
-          }`}
-        >
-          <Ionicons name="add" size={18} color={value >= max ? "#94a3b8" : "#0f172a"} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-);
-
 const SkeletonBlock = ({ className = "" }) => (
   <View className={`bg-slate-200/80 overflow-hidden ${className}`}>
     <View className="absolute inset-0 bg-slate-200/80" />
@@ -279,16 +253,34 @@ const HotelDetails = ({ navigation, route }) => {
     selectedHotelError: error,
   } = useSelector((state) => state.hotel);
 
-  const { bookingStatus, bookingError, monthlyData, gstData } = useSelector((state) => state.booking);
-  const { user } = useSelector((state) => state.user);
+  const {
+    bookingStatus,
+    bookingError,
+    monthlyData,
+    gstData,
+    couponStatus,
+    couponError,
+    discountAmount,
+    appliedCoupon,
+    couponResult,
+  } = useSelector((state) => state.booking);
+  const userState = useSelector((state) => state.user);
+  const user = userState?.user || userState?.data || null;
 
   const [checkInDate, setCheckInDate] = useState(paramCheckIn ? new Date(paramCheckIn) : new Date());
   const [checkOutDate, setCheckOutDate] = useState(
     paramCheckOut ? new Date(paramCheckOut) : new Date(Date.now() + 86400000)
   );
 
-  const [guestsCount, setGuestsCount] = useState(clamp(Number(paramGuests) || 2, 1, 20));
-  const [roomsCount, setRoomsCount] = useState(clamp(Number(paramRooms) || 1, 1, 10));
+  const initialGuestsCount = clamp(Number(paramGuests) || 2, 1, MAX_GUESTS);
+  const requiredRoomsForInitialGuests = getRequiredRoomsForGuests(initialGuestsCount);
+  const initialRoomsCount = Math.max(
+    clamp(Number(paramRooms) || 1, 1, MAX_ROOMS),
+    requiredRoomsForInitialGuests
+  );
+
+  const [guestsCount, setGuestsCount] = useState(initialGuestsCount);
+  const [roomsCount, setRoomsCount] = useState(initialRoomsCount);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
 
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
@@ -300,13 +292,18 @@ const HotelDetails = ({ navigation, route }) => {
   const [dateModalTarget, setDateModalTarget] = useState("in");
   const [calendarBase, setCalendarBase] = useState(new Date());
   const lastGstQueryRef = useRef(null);
+  const couponRoomKeyRef = useRef(null);
   const [showAllAmenities, setShowAllAmenities] = useState(false);
-  const [showAllPolicies, setShowAllPolicies] = useState(false);
+  const [showPoliciesModal, setShowPoliciesModal] = useState(false);
+  const [couponCodeInput, setCouponCodeInput] = useState("");
 
   useEffect(() => {
     if (!hotelId) return;
     dispatch(getHotelById(hotelId));
     dispatch(fetchMonthlyData(hotelId));
+    dispatch(resetCoupon());
+    setCouponCodeInput("");
+    couponRoomKeyRef.current = null;
   }, [dispatch, hotelId]);
 
   useEffect(() => {
@@ -317,6 +314,30 @@ const HotelDetails = ({ navigation, route }) => {
   }, [user]);
 
   const getRoomId = useCallback((room) => room?.id ?? room?._id ?? room?.roomId ?? null, []);
+  const getAvailableCount = useCallback((room) => {
+    return parseNumber(
+      room?.inventory?.available ??
+        room?.inventory?.availableCount ??
+        room?.inventory?.roomsLeft ??
+        room?.inventory?.count ??
+        room?.countRooms ??
+        room?.availableRooms
+    );
+  }, []);
+  const isRoomSoldOut = useCallback(
+    (room) => {
+      if (typeof room?.inventory?.isSoldOut === "boolean") return room.inventory.isSoldOut;
+      const availableCount = getAvailableCount(room);
+      if (availableCount > 0) return false;
+
+      const knownTotal = parseNumber(room?.countRooms ?? room?.inventory?.total);
+      if (knownTotal === 0 && (room?.countRooms !== undefined || room?.inventory?.total !== undefined)) {
+        return true;
+      }
+      return false;
+    },
+    [getAvailableCount]
+  );
 
   // ✅ Monthly override picker (your monthlyData sample supported)
   const pickMonthlyOverride = useCallback((data, roomId, inDate, outDate) => {
@@ -473,9 +494,20 @@ const HotelDetails = ({ navigation, route }) => {
   useEffect(() => {
     if (!roomsWithPricing.length) return;
     if (selectedRoomId) return;
-    const available = roomsWithPricing.find((r) => !r?.inventory?.isSoldOut && getRoomId(r));
+    const available = roomsWithPricing.find((r) => !isRoomSoldOut(r) && getRoomId(r));
     if (available) setSelectedRoomId(getRoomId(available));
-  }, [roomsWithPricing, selectedRoomId, getRoomId]);
+  }, [roomsWithPricing, selectedRoomId, getRoomId, isRoomSoldOut]);
+
+  useEffect(() => {
+    if (!selectedRoomId) return;
+    const roomKey = `${String(hotelId || "")}:${String(selectedRoomId)}`;
+
+    if (couponRoomKeyRef.current && couponRoomKeyRef.current !== roomKey) {
+      dispatch(resetCoupon());
+      setCouponCodeInput("");
+    }
+    couponRoomKeyRef.current = roomKey;
+  }, [dispatch, hotelId, selectedRoomId]);
 
   const selectedRoomData = useMemo(() => {
     return roomsWithPricing.find((r) => String(getRoomId(r)) === String(selectedRoomId));
@@ -494,6 +526,9 @@ const HotelDetails = ({ navigation, route }) => {
         base: 0,
         tax: 0,
         total: 0,
+        discount: 0,
+        finalTotal: 0,
+        couponApplied: false,
         perNight: 0,
         appliedTaxPercent: 0,
         taxLabel: "",
@@ -547,15 +582,35 @@ const HotelDetails = ({ navigation, route }) => {
       taxLabel = appliedTaxPercent ? `GST (${appliedTaxPercent}%)` : "No GST";
     }
 
+    const rawDiscount = parseNumber(
+      discountAmount ||
+        couponResult?.discountPrice ||
+        couponResult?.discountAmount
+    );
+    const grossTotal = baseTotal + gstTotal;
+    const discountValue = Math.min(Math.max(rawDiscount, 0), Math.max(grossTotal, 0));
+
     return {
       base: baseTotal,
       tax: gstTotal,
-      total: baseTotal + gstTotal,
+      total: grossTotal,
+      discount: discountValue,
+      finalTotal: Math.max(grossTotal - discountValue, 0),
+      couponApplied: discountValue > 0,
       perNight: pricePerNight,
       appliedTaxPercent,
       taxLabel,
     };
-  }, [selectedRoomData, roomsCount, nights, getRoomBasePrice, gstData, gstConfig]);
+  }, [
+    selectedRoomData,
+    roomsCount,
+    nights,
+    getRoomBasePrice,
+    gstData,
+    gstConfig,
+    discountAmount,
+    couponResult,
+  ]);
 
   // Optional: if you still want server GST data refresh based on perNight
   useEffect(() => {
@@ -623,6 +678,76 @@ const HotelDetails = ({ navigation, route }) => {
   const validateEmail = (email) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 
+  const handleGuestsCountChange = useCallback((nextGuests) => {
+    const normalizedGuests = clamp(nextGuests, 1, MAX_GUESTS);
+    const requiredRooms = clamp(getRequiredRoomsForGuests(normalizedGuests), 1, MAX_ROOMS);
+
+    setGuestsCount(normalizedGuests);
+    // Keep rooms synced both ways: guests + => rooms +, guests - => rooms -
+    setRoomsCount(requiredRooms);
+  }, []);
+
+  const handleRoomsCountChange = useCallback((nextRooms) => {
+    const normalizedRooms = clamp(nextRooms, 1, MAX_ROOMS);
+    const maxGuestsAllowed = normalizedRooms * MAX_GUESTS_PER_ROOM;
+
+    setRoomsCount(normalizedRooms);
+    // If rooms reduced manually, trim guests to allowed capacity.
+    setGuestsCount((prevGuests) => clamp(Math.min(prevGuests, maxGuestsAllowed), 1, MAX_GUESTS));
+  }, []);
+
+  const handleCouponInputChange = (value) => {
+    const normalized = String(value || "")
+      .trimStart()
+      .toUpperCase();
+    setCouponCodeInput(normalized);
+
+    if (
+      couponStatus !== "idle" ||
+      appliedCoupon ||
+      discountAmount > 0
+    ) {
+      dispatch(resetCoupon());
+    }
+  };
+
+  const handleApplyCoupon = async () => {
+    const code = String(couponCodeInput || "").trim().toUpperCase();
+    if (!code) {
+      Toast.show({ type: "error", text1: "Enter coupon code first" });
+      return;
+    }
+    if (!hotelId || !selectedRoomId) {
+      Toast.show({ type: "error", text1: "Please select an available room first" });
+      return;
+    }
+
+    const userId = await getUserId();
+    if (!userId) {
+      Toast.show({ type: "error", text1: "Please login to apply coupon" });
+      return;
+    }
+
+    try {
+      await dispatch(
+        applyCouponCode({
+          hotelId: String(hotelId),
+          roomId: String(selectedRoomId),
+          couponCode: code,
+          userId: String(userId),
+        })
+      ).unwrap();
+      setCouponCodeInput(code);
+    } catch {
+      // Error toast is shown from thunk
+    }
+  };
+
+  const handleClearCoupon = () => {
+    dispatch(resetCoupon());
+    setCouponCodeInput("");
+  };
+
   const submitBooking = async () => {
     const name = String(guestName || "").trim();
     const phone = String(guestPhone || "").trim();
@@ -640,6 +765,13 @@ const HotelDetails = ({ navigation, route }) => {
       Alert.alert("Select Room", "Please select a room first.");
       return;
     }
+    if (guestsCount > roomsCount * MAX_GUESTS_PER_ROOM) {
+      Alert.alert(
+        "Guest Limit Exceeded",
+        `Only ${MAX_GUESTS_PER_ROOM} guests are allowed per room.`
+      );
+      return;
+    }
 
     const userId = await getUserId();
 
@@ -654,7 +786,9 @@ const HotelDetails = ({ navigation, route }) => {
       guestName: name,
       guestEmail: email,
       guestPhone: phone,
-      totalAmount: pricing.total,
+      totalAmount: pricing.finalTotal,
+      couponCode: appliedCoupon || undefined,
+      couponDiscount: pricing.discount || 0,
       // helpful debug fields (optional)
       appliedTaxPercent: pricing.appliedTaxPercent,
       pricingSource: selectedRoomData?.__pricing?.isOverrideApplied ? "monthlyOverride" : "default",
@@ -684,10 +818,15 @@ const HotelDetails = ({ navigation, route }) => {
     return showAllAmenities ? safeAmenities : safeAmenities.slice(0, limit);
   }, [safeAmenities, showAllAmenities]);
 
-  const policiesToShow = useMemo(() => {
-    const limit = 6;
-    return showAllPolicies ? policyItems : policyItems.slice(0, limit);
-  }, [policyItems, showAllPolicies]);
+  const amenityRows = useMemo(() => {
+    const rows = [];
+    for (let i = 0; i < amenitiesToShow.length; i += 2) {
+      rows.push(amenitiesToShow.slice(i, i + 2));
+    }
+    return rows;
+  }, [amenitiesToShow]);
+
+  const previewPolicies = useMemo(() => policyItems.slice(0, 5), [policyItems]);
 
   if (loading) {
     return (
@@ -880,77 +1019,129 @@ const HotelDetails = ({ navigation, route }) => {
               <Text className="text-slate-600 text-sm leading-6">{basicInfo.description}</Text>
             </View>
           )}
-
           {/* Stay card */}
-          <View className="mt-6">
-            <SectionTitle
-              title="Your Stay"
-              right={
-                <View className="bg-blue-50 px-3 py-1.5 rounded-full flex-row items-center">
-                  <Ionicons name="moon-outline" size={14} color="#0d3b8f" />
-                  <Text className="text-[#0d3b8f] text-xs font-extrabold ml-2">
-                    {nights} night{nights > 1 ? "s" : ""}
-                  </Text>
+          <View className="mt-5">
+            <SectionTitle title="Your Stay" />
+
+            <View className="bg-white rounded-[16px] border border-slate-300 overflow-hidden">
+              <View className="p-2">
+                <View className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-3 flex-row items-center">
+                  <TouchableOpacity onPress={openCheckIn} className="flex-1 items-center px-2">
+                    <Text className="text-xs font-bold text-slate-700">Check-in:</Text>
+                    <Text className="text-lg font-extrabold text-slate-900 mt-0.5">
+                      {formatFullDate(checkInDate)}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View className="px-1">
+                    <Ionicons name="arrow-forward" size={22} color="#0f172a" />
+                  </View>
+
+                  <TouchableOpacity onPress={openCheckOut} className="flex-1 items-center px-2">
+                    <Text className="text-xs font-bold text-slate-700">Check-out:</Text>
+                    <Text className="text-lg font-extrabold text-slate-900 mt-0.5">
+                      {formatFullDate(checkOutDate)}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-              }
-            />
-
-            <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm mb-4">
-              <Text className="text-[10px] font-bold text-slate-500 uppercase">Dates</Text>
-
-              <View className="flex-row gap-3 mt-2">
-                <TouchableOpacity onPress={openCheckIn} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <Text className="text-[10px] font-bold text-slate-400 uppercase">Check-in</Text>
-                  <Text className="text-sm font-extrabold text-slate-900 mt-1">
-                    {formatShortDate(checkInDate)}
-                  </Text>
-                  <Text className="text-[10px] text-slate-400 mt-0.5">{formatFullDate(checkInDate)}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={openCheckOut} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <Text className="text-[10px] font-bold text-slate-400 uppercase">Check-out</Text>
-                  <Text className="text-sm font-extrabold text-slate-900 mt-1">
-                    {formatShortDate(checkOutDate)}
-                  </Text>
-                  <Text className="text-[10px] text-slate-400 mt-0.5">{formatFullDate(checkOutDate)}</Text>
-                </TouchableOpacity>
               </View>
 
-              <View className="flex-row items-center justify-between mt-4">
-                <View className="flex-row items-center">
-                  <Ionicons name="people-outline" size={16} color="#64748b" />
-                  <Text className="text-xs text-slate-500 ml-2">
-                    {guestsCount} guest • {roomsCount} room
-                  </Text>
+              <View className="px-3 pb-2 flex-row items-center justify-between">
+                <Text className="flex-1 text-xs font-semibold text-slate-700">
+                  {guestsCount} Guest{guestsCount > 1 ? "s" : ""} {"\u2022"} {roomsCount} Room
+                  {roomsCount > 1 ? "s" : ""}
+                </Text>
+                <Text className="flex-1 text-xs font-semibold text-slate-700 text-right">
+                  {formatShortDate(checkInDate)} {"\u2192"} {formatShortDate(checkOutDate)}
+                </Text>
+              </View>
+
+              <View className="h-[1px] bg-slate-300" />
+
+              <View className="px-3 py-4 flex-row items-center">
+                <View className="flex-1 items-center">
+                  <Text className="text-sm font-extrabold text-slate-800 mb-2">Guests:</Text>
+                  <View className="flex-row items-center">
+                    <TouchableOpacity
+                      onPress={() => handleGuestsCountChange(guestsCount - 1)}
+                      disabled={guestsCount <= 1}
+                      className={`w-9 h-9 rounded-lg items-center justify-center border ${
+                        guestsCount <= 1
+                          ? "bg-slate-100 border-slate-200"
+                          : "bg-white border-slate-300"
+                      }`}
+                    >
+                      <Ionicons
+                        name="remove"
+                        size={14}
+                        color={guestsCount <= 1 ? "#94a3b8" : "#0f172a"}
+                      />
+                    </TouchableOpacity>
+
+                    <Text className="w-9 text-center text-sm font-extrabold text-slate-900">
+                      {guestsCount}
+                    </Text>
+
+                    <TouchableOpacity
+                      onPress={() => handleGuestsCountChange(guestsCount + 1)}
+                      disabled={guestsCount >= MAX_GUESTS}
+                      className={`w-9 h-9 rounded-lg items-center justify-center border ${
+                        guestsCount >= MAX_GUESTS
+                          ? "bg-slate-100 border-slate-200"
+                          : "bg-white border-slate-300"
+                      }`}
+                    >
+                      <Ionicons
+                        name="add"
+                        size={14}
+                        color={guestsCount >= MAX_GUESTS ? "#94a3b8" : "#0f172a"}
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View className="flex-row items-center">
-                  <Ionicons name="calendar-outline" size={16} color="#64748b" />
-                  <Text className="text-xs text-slate-500 ml-2">
-                    {formatShortDate(checkInDate)} → {formatShortDate(checkOutDate)}
-                  </Text>
+
+                <View className="flex-1 items-center">
+                  <Text className="text-sm font-extrabold text-slate-800 mb-2">Rooms:</Text>
+                  <View className="flex-row items-center">
+                    <TouchableOpacity
+                      onPress={() => handleRoomsCountChange(roomsCount - 1)}
+                      disabled={roomsCount <= 1}
+                      className={`w-9 h-9 rounded-lg items-center justify-center border ${
+                        roomsCount <= 1
+                          ? "bg-slate-100 border-slate-200"
+                          : "bg-white border-slate-300"
+                      }`}
+                    >
+                      <Ionicons
+                        name="remove"
+                        size={14}
+                        color={roomsCount <= 1 ? "#94a3b8" : "#0f172a"}
+                      />
+                    </TouchableOpacity>
+
+                    <Text className="w-9 text-center text-sm font-extrabold text-slate-900">
+                      {roomsCount}
+                    </Text>
+
+                    <TouchableOpacity
+                      onPress={() => handleRoomsCountChange(roomsCount + 1)}
+                      disabled={roomsCount >= MAX_ROOMS}
+                      className={`w-9 h-9 rounded-lg items-center justify-center border ${
+                        roomsCount >= MAX_ROOMS
+                          ? "bg-slate-100 border-slate-200"
+                          : "bg-white border-slate-300"
+                      }`}
+                    >
+                      <Ionicons
+                        name="add"
+                        size={14}
+                        color={roomsCount >= MAX_ROOMS ? "#94a3b8" : "#0f172a"}
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </View>
-
-            <Stepper
-              label="Guests"
-              subtitle="How many people are staying?"
-              value={guestsCount}
-              min={1}
-              max={20}
-              onDec={() => setGuestsCount((v) => clamp(v - 1, 1, 20))}
-              onInc={() => setGuestsCount((v) => clamp(v + 1, 1, 20))}
-            />
-
-            <Stepper
-              label="Rooms"
-              subtitle="How many rooms do you need?"
-              value={roomsCount}
-              min={1}
-              max={10}
-              onDec={() => setRoomsCount((v) => clamp(v - 1, 1, 10))}
-              onInc={() => setRoomsCount((v) => clamp(v + 1, 1, 10))}
-            />
           </View>
 
           {/* Foods (NEW) */}
@@ -993,16 +1184,39 @@ const HotelDetails = ({ navigation, route }) => {
                 }
               />
               <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm">
-                <View className="flex-row flex-wrap gap-2">
-                  {amenitiesToShow.map((item, idx) => (
-                    <View key={`${String(item)}-${idx}`} className="flex-row items-center px-3 py-2 rounded-full border border-slate-200 bg-white">
-                      <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
-                      <Text className="text-slate-700 text-xs font-bold ml-2">
-                        {typeof item === "string" ? item : String(item)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                {amenityRows.map((row, rowIdx) => (
+                  <View
+                    key={`amenity-row-${rowIdx}`}
+                    className={`flex-row ${rowIdx < amenityRows.length - 1 ? "mb-2" : ""}`}
+                  >
+                    {row.map((item, colIdx) => {
+                      const rawAmenityName =
+                        typeof item === "string"
+                          ? item
+                          : item?.name || item?.title || item?.label || String(item);
+                      const amenityLabel = getAmenityDisplayName(rawAmenityName);
+                      const amenityIcon = getAmenityIconName(rawAmenityName);
+
+                      return (
+                        <View
+                          key={`${String(item)}-${rowIdx}-${colIdx}`}
+                          className={`flex-1 flex-row items-center px-3 py-2 rounded-full border border-slate-200 bg-white ${
+                            colIdx === 0 ? "mr-2" : ""
+                          }`}
+                        >
+                          <Ionicons name={amenityIcon} size={16} color="#16a34a" />
+                          <Text
+                            numberOfLines={1}
+                            className="text-slate-700 text-xs font-bold ml-2 flex-1"
+                          >
+                            {amenityLabel}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                    {row.length === 1 && <View className="flex-1 ml-2" />}
+                  </View>
+                ))}
               </View>
             </View>
           )}
@@ -1026,7 +1240,7 @@ const HotelDetails = ({ navigation, route }) => {
             {roomsWithPricing.map((room, idx) => {
               const roomId = getRoomId(room);
               const isSelected = String(selectedRoomId) === String(roomId);
-              const soldOut = !!room?.inventory?.isSoldOut;
+              const soldOut = isRoomSoldOut(room);
 
               const nightlyPrice = room.__pricing?.nightlyPrice ?? getRoomBasePrice(room);
               const roomTaxPercent = parseNumber(
@@ -1040,12 +1254,7 @@ const HotelDetails = ({ navigation, route }) => {
                 ? `${pricing.appliedTaxPercent}%`
                 : "12%";
 
-              const availableCount = parseNumber(
-                room?.inventory?.available ??
-                  room?.inventory?.availableCount ??
-                  room?.inventory?.roomsLeft ??
-                  room?.inventory?.count
-              );
+              const availableCount = getAvailableCount(room);
               const availabilityText = soldOut
                 ? "Sold Out"
                 : availableCount > 0
@@ -1172,41 +1381,135 @@ const HotelDetails = ({ navigation, route }) => {
             })}
           </View>
 
+          {/* Coupon */}
+          <View className="mt-1 mb-4">
+            <SectionTitle title="Apply Coupon" />
+            <View className="bg-white rounded-[20px] p-4 border border-slate-100 shadow-sm">
+              <View className="flex-row items-center">
+                <View className="flex-1 flex-row items-center border border-slate-200 rounded-xl px-3 h-11 bg-slate-50">
+                  <Ionicons name="ticket-outline" size={16} color="#64748b" />
+                  <TextInput
+                    value={couponCodeInput}
+                    onChangeText={handleCouponInputChange}
+                    placeholder="Enter coupon code"
+                    autoCapitalize="characters"
+                    className="flex-1 ml-2 text-slate-900 font-bold text-xs"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+
+                <TouchableOpacity
+                  onPress={appliedCoupon ? handleClearCoupon : handleApplyCoupon}
+                  disabled={couponStatus === "loading"}
+                  className={`ml-2 px-4 h-11 rounded-xl items-center justify-center ${
+                    couponStatus === "loading" ? "bg-slate-300" : appliedCoupon ? "bg-slate-200" : "bg-[#0d3b8f]"
+                  }`}
+                >
+                  {couponStatus === "loading" ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text
+                      className={`font-extrabold text-xs ${
+                        appliedCoupon ? "text-slate-700" : "text-white"
+                      }`}
+                    >
+                      {appliedCoupon ? "Remove" : "Apply"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {!!appliedCoupon && pricing.discount > 0 && (
+                <View className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex-row items-center justify-between">
+                  <Text className="text-[11px] font-bold text-emerald-700">
+                    {appliedCoupon} applied
+                  </Text>
+                  <Text className="text-[11px] font-extrabold text-emerald-700">
+                    -{currencySymbol}{Math.round(pricing.discount).toLocaleString()}
+                  </Text>
+                </View>
+              )}
+
+              {couponStatus === "failed" && !!couponError && (
+                <Text className="mt-2 text-[11px] font-bold text-rose-600">{couponError}</Text>
+              )}
+            </View>
+          </View>
+
           {/* Policies */}
           <View className="mt-2">
-            <SectionTitle
-              title="Policies"
-              right={
-                policyItems.length > 6 ? (
-                  <TouchableOpacity onPress={() => setShowAllPolicies((v) => !v)}>
-                    <Text className="text-xs font-extrabold text-[#0d3b8f]">
-                      {showAllPolicies ? "Show less" : "View all"}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null
-              }
-            />
+            <SectionTitle title="Policies" />
             <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm">
               {policyItems.length === 0 ? (
                 <Text className="text-xs text-slate-500">No policies available.</Text>
               ) : (
-                policiesToShow.map((item, idx) => (
+                previewPolicies.map((item, idx) => (
                   <View key={`${item.key}-${idx}`}>
-                    <View className="flex-row items-center justify-between">
+                    <View className="flex-row items-start justify-between">
                       <View className="flex-row items-center">
                         <Ionicons name={item.icon} size={14} color="#64748b" />
                         <Text className="text-xs font-bold text-slate-500 ml-2">{item.label}</Text>
                       </View>
-                      <Text className="text-xs font-extrabold text-slate-900">{item.value}</Text>
+                      <Text className="text-xs font-extrabold text-slate-900 ml-4 flex-1 text-right">
+                        {item.value}
+                      </Text>
                     </View>
-                    {idx < policiesToShow.length - 1 && <View className="h-[1px] bg-slate-100 my-3" />}
+                    {idx < previewPolicies.length - 1 && <View className="h-[1px] bg-slate-100 my-3" />}
                   </View>
                 ))
+              )}
+              {policyItems.length > 5 && (
+                <>
+                  <View className="h-[1px] bg-slate-100 my-3" />
+                  <TouchableOpacity
+                    onPress={() => setShowPoliciesModal(true)}
+                    className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                  >
+                    <Text className="text-xs font-extrabold text-[#0d3b8f]">See Terms & Conditions</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#0d3b8f" />
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        animationType="slide"
+        visible={showPoliciesModal}
+        onRequestClose={() => setShowPoliciesModal(false)}
+      >
+        <SafeAreaView className="flex-1 bg-slate-50">
+          <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-200 bg-white">
+            <TouchableOpacity onPress={() => setShowPoliciesModal(false)} className="p-1">
+              <Ionicons name="chevron-back" size={22} color="#0f172a" />
+            </TouchableOpacity>
+            <Text className="text-base font-extrabold text-slate-900">Terms & Conditions</Text>
+            <View className="w-6" />
+          </View>
+
+          <ScrollView className="flex-1 px-5 pt-4">
+            <View className="bg-white rounded-[20px] p-4 border border-slate-100 shadow-sm">
+              {policyItems.map((item, idx) => (
+                <View key={`full-${item.key}-${idx}`}>
+                  <View className="flex-row items-start justify-between">
+                    <View className="flex-row items-center pr-2">
+                      <Ionicons name={item.icon} size={15} color="#64748b" />
+                      <Text className="text-xs font-bold text-slate-500 ml-2">{item.label}</Text>
+                    </View>
+                    <Text className="text-xs font-extrabold text-slate-900 ml-4 flex-1 text-right">
+                      {item.value}
+                    </Text>
+                  </View>
+                  {idx < policyItems.length - 1 && <View className="h-[1px] bg-slate-100 my-3" />}
+                </View>
+              ))}
+            </View>
+            <View className="h-6" />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Bottom Action Bar */}
       <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-5 py-4 flex-row items-center justify-between pb-8 shadow-lg z-10">
@@ -1215,7 +1518,7 @@ const HotelDetails = ({ navigation, route }) => {
             {roomsCount} Room • {guestsCount} Guest • {nights} Night
           </Text>
           <Text className="text-2xl font-extrabold text-[#0d3b8f]">
-            {currencySymbol}{Math.round(pricing.total).toLocaleString()}
+            {currencySymbol}{Math.round(pricing.finalTotal).toLocaleString()}
           </Text>
           <Text className="text-[10px] text-slate-400 mt-1">
             {pricing.taxLabel ? `${pricing.taxLabel} included in estimate` : "Taxes calculated"}
@@ -1308,12 +1611,23 @@ const HotelDetails = ({ navigation, route }) => {
                     </Text>
                   </View>
 
+                  {pricing.couponApplied && (
+                    <View className="flex-row justify-between mb-2">
+                      <Text className="text-emerald-600 text-xs font-bold">
+                        Coupon Discount {appliedCoupon ? `(${appliedCoupon})` : ""}
+                      </Text>
+                      <Text className="text-emerald-700 font-extrabold text-xs">
+                        -{currencySymbol}{Math.round(pricing.discount).toLocaleString()}
+                      </Text>
+                    </View>
+                  )}
+
                   <View className="h-[1px] bg-slate-200 my-2" />
 
                   <View className="flex-row justify-between">
                     <Text className="text-slate-900 font-extrabold text-sm">Total Amount</Text>
                     <Text className="text-[#0d3b8f] font-extrabold text-lg">
-                      {currencySymbol}{Math.round(pricing.total).toLocaleString()}
+                      {currencySymbol}{Math.round(pricing.finalTotal).toLocaleString()}
                     </Text>
                   </View>
 

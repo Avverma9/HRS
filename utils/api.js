@@ -1,6 +1,6 @@
 import axios from "axios";
-import * as SecureStore from "expo-secure-store";
 import { baseURL as url } from "./baseUrl";
+import { getToken } from "./credentials";
 
 const api = axios.create({
   baseURL: url,
@@ -8,7 +8,7 @@ const api = axios.create({
   withCredentials: false,
 });
 
-export const getAccessToken = () => SecureStore.getItemAsync("rsToken");
+export const getAccessToken = () => getToken();
 
 api.interceptors.request.use(
   async (config) => {

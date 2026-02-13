@@ -21,8 +21,10 @@
     "babel-preset-expo": "^54.0.7",
     "expo": "~54.0.23",
     "expo-blur": "~15.0.7",
+    "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "~15.0.7",
     "expo-location": "~19.0.7",
+    "expo-print": "^15.0.8",
     "expo-secure-store": "^15.0.7",
     "expo-status-bar": "~3.0.8",
     "nativewind": "^4.2.1",
@@ -38,6 +40,7 @@
     "react-native-toast-message": "^2.3.3",
     "react-native-vector-icons": "^10.3.0",
     "react-native-web": "^0.21.0",
+    "react-native-webview": "^13.16.0",
     "react-native-worklets": "^0.6.1",
     "react-redux": "^9.1.0"
   },
