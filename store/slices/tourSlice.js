@@ -24,24 +24,18 @@ export const fetchTourList = createAsyncThunk(
   }
 );
 
-export const searchToursFromTo = createAsyncThunk(
-  "tour/searchToursFromTo",
-  async ({ from = "", to = "" } = {}, { rejectWithValue }) => {
+export const filterToursByQuery = createAsyncThunk(
+  "tour/filterToursByQuery",
+  async (params = {}, { rejectWithValue }) => {
     try {
-      const response = await api.get("/search-tours/from-to", {
-        params: {
-          from: String(from || "").trim(),
-          to: String(to || "").trim(),
-        },
-      });
-
+      const response = await api.get("/filter-tour/by-query", { params });
       return {
         items: normalizeTourResponse(response?.data),
         message: response?.data?.message || null,
       };
     } catch (error) {
       return rejectWithValue(
-        error?.response?.data || { message: error?.message || "Unable to search tours" }
+        error?.response?.data || { message: error?.message || "Unable to filter tours" }
       );
     }
   }
@@ -56,74 +50,6 @@ export const fetchTourById = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(
         error?.response?.data || { message: error?.message || "Unable to fetch tour details" }
-      );
-    }
-  }
-);
-
-export const sortToursByOrder = createAsyncThunk(
-  "tour/sortToursByOrder",
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await api.get("/sort-tour/by-order", { params });
-      return {
-        items: normalizeTourResponse(response?.data),
-        message: response?.data?.message || null,
-      };
-    } catch (error) {
-      return rejectWithValue(
-        error?.response?.data || { message: error?.message || "Unable to sort tours by order" }
-      );
-    }
-  }
-);
-
-export const sortToursByPrice = createAsyncThunk(
-  "tour/sortToursByPrice",
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await api.get("/sort-tour/by-price", { params });
-      return {
-        items: normalizeTourResponse(response?.data),
-        message: response?.data?.message || null,
-      };
-    } catch (error) {
-      return rejectWithValue(
-        error?.response?.data || { message: error?.message || "Unable to sort tours by price" }
-      );
-    }
-  }
-);
-
-export const sortToursByDuration = createAsyncThunk(
-  "tour/sortToursByDuration",
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await api.get("/sort-tour/by-duration", { params });
-      return {
-        items: normalizeTourResponse(response?.data),
-        message: response?.data?.message || null,
-      };
-    } catch (error) {
-      return rejectWithValue(
-        error?.response?.data || { message: error?.message || "Unable to sort tours by duration" }
-      );
-    }
-  }
-);
-
-export const sortToursByThemes = createAsyncThunk(
-  "tour/sortToursByThemes",
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await api.get("/sort-tour/by-themes", { params });
-      return {
-        items: normalizeTourResponse(response?.data),
-        message: response?.data?.message || null,
-      };
-    } catch (error) {
-      return rejectWithValue(
-        error?.response?.data || { message: error?.message || "Unable to sort tours by themes" }
       );
     }
   }
@@ -172,74 +98,18 @@ const tourSlice = createSlice({
         state.error = action.payload || { message: "Failed to fetch tours" };
         state.items = [];
       })
-      .addCase(searchToursFromTo.pending, (state) => {
+      .addCase(filterToursByQuery.pending, (state) => {
         state.status = "loading";
         state.error = null;
       })
-      .addCase(searchToursFromTo.fulfilled, (state, action) => {
+      .addCase(filterToursByQuery.fulfilled, (state, action) => {
         state.status = "succeeded";
         state.items = Array.isArray(action.payload?.items) ? action.payload.items : [];
         state.message = action.payload?.message || null;
       })
-      .addCase(searchToursFromTo.rejected, (state, action) => {
+      .addCase(filterToursByQuery.rejected, (state, action) => {
         state.status = "failed";
-        state.error = action.payload || { message: "Failed to search tours" };
-        state.items = [];
-      })
-      .addCase(sortToursByOrder.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
-      .addCase(sortToursByOrder.fulfilled, (state, action) => {
-        state.status = "succeeded";
-        state.items = Array.isArray(action.payload?.items) ? action.payload.items : [];
-        state.message = action.payload?.message || null;
-      })
-      .addCase(sortToursByOrder.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload || { message: "Failed to sort tours by order" };
-        state.items = [];
-      })
-      .addCase(sortToursByPrice.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
-      .addCase(sortToursByPrice.fulfilled, (state, action) => {
-        state.status = "succeeded";
-        state.items = Array.isArray(action.payload?.items) ? action.payload.items : [];
-        state.message = action.payload?.message || null;
-      })
-      .addCase(sortToursByPrice.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload || { message: "Failed to sort tours by price" };
-        state.items = [];
-      })
-      .addCase(sortToursByDuration.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
-      .addCase(sortToursByDuration.fulfilled, (state, action) => {
-        state.status = "succeeded";
-        state.items = Array.isArray(action.payload?.items) ? action.payload.items : [];
-        state.message = action.payload?.message || null;
-      })
-      .addCase(sortToursByDuration.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload || { message: "Failed to sort tours by duration" };
-        state.items = [];
-      })
-      .addCase(sortToursByThemes.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
-      .addCase(sortToursByThemes.fulfilled, (state, action) => {
-        state.status = "succeeded";
-        state.items = Array.isArray(action.payload?.items) ? action.payload.items : [];
-        state.message = action.payload?.message || null;
-      })
-      .addCase(sortToursByThemes.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload || { message: "Failed to sort tours by themes" };
+        state.error = action.payload || { message: "Failed to filter tours" };
         state.items = [];
       })
       .addCase(fetchTourById.pending, (state) => {

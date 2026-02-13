@@ -19,11 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../contexts/ThemeContext";
 import {
   fetchTourList,
-  searchToursFromTo,
-  sortToursByOrder,
-  sortToursByPrice,
-  sortToursByDuration,
-  sortToursByThemes,
+  filterToursByQuery,
   fetchTourById,
   resetSelectedTour,
 } from "../store/slices/tourSlice";
@@ -277,7 +273,6 @@ export default function Tour() {
   const [sortOrderFilter, setSortOrderFilter] = useState("default");
   const [durationSortFilter, setDurationSortFilter] = useState("default");
   const [showTopFilterBar, setShowTopFilterBar] = useState(true);
-  const hasFromToSearchRef = useRef(false);
 
   const tours = Array.isArray(tourState?.items) ? tourState.items : [];
   const isLoading = tourState?.status === "loading";
@@ -297,37 +292,7 @@ export default function Tour() {
     return [...new Set(amenities)].filter(Boolean);
   }, [tours]);
 
-  const filteredTours = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    const fromQ = fromCity.trim().toLowerCase();
-    const toQ = toCity.trim().toLowerCase();
-
-    return tours.filter((tour) => {
-      const price = toNumber(tour?.price);
-      const rating = toNumber(tour?.starRating);
-      const themeTokens = splitCsvText(tour?.themes);
-      const amenityTokens = Array.isArray(tour?.amenities)
-        ? tour.amenities.map((item) => String(item || "").trim()).filter(Boolean)
-        : splitCsvText(tour?.amenities);
-
-      const places = getTourPlaces(tour).toLowerCase();
-      const agency = String(tour?.travelAgencyName || "").toLowerCase();
-      const city = String(tour?.city || "").toLowerCase();
-
-      const themesMatch = !selectedThemes.length || selectedThemes.some((theme) => themeTokens.includes(theme));
-      const amenitiesMatch =
-        !tourSelectedAmenities.length || tourSelectedAmenities.every((amenity) => amenityTokens.includes(amenity));
-      const priceMatch = price >= tourPriceRange[0] && price <= tourPriceRange[1];
-      const ratingMatch = !tourMinRating || rating >= tourMinRating;
-
-      const fromMatch = !fromQ || agency.includes(fromQ) || places.includes(fromQ) || city.includes(fromQ);
-      const toMatch = !toQ || places.includes(toQ) || city.includes(toQ);
-
-      const searchMatch = !query || places.includes(query) || agency.includes(query) || city.includes(query);
-
-      return themesMatch && amenitiesMatch && priceMatch && ratingMatch && fromMatch && toMatch && searchMatch;
-    });
-  }, [searchText, fromCity, toCity, selectedThemes, tourMinRating, tourPriceRange, tourSelectedAmenities, tours]);
+  const filteredTours = tours;
 
   const toggleTheme = (theme) => {
     setSelectedThemes((prev) => (prev.includes(theme) ? prev.filter((item) => item !== theme) : [...prev, theme]));
@@ -343,45 +308,69 @@ export default function Tour() {
     dispatch(fetchTourList());
   }, [dispatch]);
 
+  const buildFilterQueryPayload = ({ includeAdvanced = true } = {}) => {
+    const from = String(fromCity || "").trim();
+    const to = String(toCity || "").trim();
+    const queryText = String(searchText || "").trim();
+
+    const payload = {
+      page: 1,
+      limit: 50,
+    };
+
+    if (from && to) {
+      payload.q = `${from} ${to} ${queryText}`.trim();
+      payload.city = to;
+    } else if (from) {
+      payload.q = `${from} ${queryText}`.trim();
+    } else if (to) {
+      payload.q = `${to} ${queryText}`.trim();
+      payload.city = to;
+    } else if (queryText) {
+      payload.q = queryText;
+    }
+
+    if (includeAdvanced) {
+      if (selectedThemes.length) payload.themes = selectedThemes.join(",");
+      if (tourSelectedAmenities.length) payload.amenities = tourSelectedAmenities.join(",");
+      if (tourPriceRange[0] !== 0) payload.minPrice = tourPriceRange[0];
+      if (tourPriceRange[1] !== 50000) payload.maxPrice = tourPriceRange[1];
+      if (tourMinRating > 0) payload.minRating = tourMinRating;
+
+      if (durationSortFilter !== "default") {
+        payload.sortBy = "nights";
+        payload.sortOrder = durationSortFilter;
+      } else if (sortOrderFilter !== "default") {
+        payload.sortBy = "createdAt";
+        payload.sortOrder = sortOrderFilter;
+      }
+    }
+
+    return payload;
+  };
+
   useEffect(() => {
     const from = String(fromCity || "").trim();
     const to = String(toCity || "").trim();
+    const q = String(searchText || "").trim();
 
-    if (!from && !to) {
-      if (hasFromToSearchRef.current) {
-        console.log("[Tour Filters] from/to cleared, refetching full list");
-        dispatch(fetchTourList());
-        hasFromToSearchRef.current = false;
-      }
+    if (!from && !to && !q) {
       return undefined;
     }
 
-    hasFromToSearchRef.current = true;
-
     const timer = setTimeout(() => {
-      console.log("[Tour Filters] realtime from-to payload", { from, to });
-      dispatch(searchToursFromTo({ from, to }));
+      const payload = buildFilterQueryPayload({ includeAdvanced: false });
+      console.log("[Tour Filters] realtime /filter-tour/by-query payload", payload);
+      dispatch(filterToursByQuery(payload));
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [dispatch, fromCity, toCity]);
+  }, [dispatch, fromCity, toCity, searchText]);
 
   const handleApplyFilters = async () => {
-    const from = String(fromCity || "").trim();
-    const to = String(toCity || "").trim();
-
-    const baseParams = {};
-    if (from) baseParams.from = from;
-    if (to) baseParams.to = to;
-
-    const hasThemeFilters = selectedThemes.length > 0;
-    const hasPriceFilter = tourPriceRange[0] !== 0 || tourPriceRange[1] !== 50000;
-    const hasDurationSort = durationSortFilter !== "default";
-    const hasOrderSort = sortOrderFilter !== "default";
-
     console.log("[Tour Filters] current-state", {
-      from,
-      to,
+      from: String(fromCity || "").trim(),
+      to: String(toCity || "").trim(),
       tourPriceRange,
       tourMinRating,
       selectedThemes,
@@ -390,50 +379,9 @@ export default function Tour() {
       durationSortFilter,
     });
 
-    if (hasThemeFilters) {
-      const payload = {
-        ...baseParams,
-        themes: selectedThemes.join(","),
-      };
-      console.log("[Tour Filters] API /sort-tour/by-themes payload", payload);
-      await dispatch(
-        sortToursByThemes(payload)
-      );
-    } else if (hasPriceFilter) {
-      const payload = {
-        ...baseParams,
-        minPrice: tourPriceRange[0],
-        maxPrice: tourPriceRange[1],
-      };
-      console.log("[Tour Filters] API /sort-tour/by-price payload", payload);
-      await dispatch(
-        sortToursByPrice(payload)
-      );
-    } else if (hasDurationSort) {
-      const payload = {
-        ...baseParams,
-        order: durationSortFilter,
-      };
-      console.log("[Tour Filters] API /sort-tour/by-duration payload", payload);
-      await dispatch(
-        sortToursByDuration(payload)
-      );
-    } else if (hasOrderSort) {
-      const payload = {
-        ...baseParams,
-        order: sortOrderFilter,
-      };
-      console.log("[Tour Filters] API /sort-tour/by-order payload", payload);
-      await dispatch(
-        sortToursByOrder(payload)
-      );
-    } else if (from || to) {
-      console.log("[Tour Filters] API /search-tours/from-to payload", { from, to });
-      await dispatch(searchToursFromTo({ from, to }));
-    } else {
-      console.log("[Tour Filters] API /get-tour-list payload", {});
-      await dispatch(fetchTourList());
-    }
+    const payload = buildFilterQueryPayload({ includeAdvanced: true });
+    console.log("[Tour Filters] API /filter-tour/by-query payload", payload);
+    await dispatch(filterToursByQuery(payload));
 
     setShowFilterModal(false);
     setShowTopFilterBar(false);
@@ -450,7 +398,6 @@ export default function Tour() {
     setToCity("");
     setSearchText("");
     setShowTopFilterBar(true);
-    hasFromToSearchRef.current = false;
 
     console.log("[Tour Filters] clear-all -> refetch payload", {});
     await dispatch(fetchTourList());
