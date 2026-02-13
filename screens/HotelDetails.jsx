@@ -284,9 +284,9 @@ const HotelDetails = ({ navigation, route }) => {
   const [selectedRoomId, setSelectedRoomId] = useState(null);
 
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
-  const [guestName, setGuestName] = useState(user?.name || "");
+  const [guestName, setGuestName] = useState(user?.userName || "");
   const [guestEmail, setGuestEmail] = useState(user?.email || "");
-  const [guestPhone, setGuestPhone] = useState(user?.phone || "");
+  const [guestPhone, setGuestPhone] = useState(user?.mobile || "");
 
   const [showDateModal, setShowDateModal] = useState(false);
   const [dateModalTarget, setDateModalTarget] = useState("in");
