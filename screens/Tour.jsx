@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  ActivityIndicator,
   TouchableOpacity,
   TextInput,
   Image,
@@ -16,7 +17,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../contexts/ThemeContext";
-import { fetchTourList, searchToursFromTo } from "../store/slices/tourSlice";
+import {
+  fetchTourList,
+  searchToursFromTo,
+  sortToursByOrder,
+  sortToursByPrice,
+  sortToursByDuration,
+  sortToursByThemes,
+  fetchTourById,
+  resetSelectedTour,
+} from "../store/slices/tourSlice";
 import { useNavigation } from "@react-navigation/native";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -250,8 +260,11 @@ export default function Tour() {
   const dispatch = useDispatch();
   const { isDark } = useTheme();
   const tourState = useSelector((state) => state.tour);
+  const selectedTour = tourState?.selectedTour;
+  const selectedTourStatus = tourState?.selectedTourStatus;
 
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showTourDetailModal, setShowTourDetailModal] = useState(false);
   const [searchText, setSearchText] = useState("");
 
   const [fromCity, setFromCity] = useState("");
@@ -261,6 +274,9 @@ export default function Tour() {
   const [tourMinRating, setTourMinRating] = useState(0);
   const [tourSelectedAmenities, setTourSelectedAmenities] = useState([]);
   const [selectedThemes, setSelectedThemes] = useState([]);
+  const [sortOrderFilter, setSortOrderFilter] = useState("default");
+  const [durationSortFilter, setDurationSortFilter] = useState("default");
+  const [showTopFilterBar, setShowTopFilterBar] = useState(true);
   const hasFromToSearchRef = useRef(false);
 
   const tours = Array.isArray(tourState?.items) ? tourState.items : [];
@@ -333,6 +349,7 @@ export default function Tour() {
 
     if (!from && !to) {
       if (hasFromToSearchRef.current) {
+        console.log("[Tour Filters] from/to cleared, refetching full list");
         dispatch(fetchTourList());
         hasFromToSearchRef.current = false;
       }
@@ -342,11 +359,113 @@ export default function Tour() {
     hasFromToSearchRef.current = true;
 
     const timer = setTimeout(() => {
+      console.log("[Tour Filters] realtime from-to payload", { from, to });
       dispatch(searchToursFromTo({ from, to }));
     }, 350);
 
     return () => clearTimeout(timer);
   }, [dispatch, fromCity, toCity]);
+
+  const handleApplyFilters = async () => {
+    const from = String(fromCity || "").trim();
+    const to = String(toCity || "").trim();
+
+    const baseParams = {};
+    if (from) baseParams.from = from;
+    if (to) baseParams.to = to;
+
+    const hasThemeFilters = selectedThemes.length > 0;
+    const hasPriceFilter = tourPriceRange[0] !== 0 || tourPriceRange[1] !== 50000;
+    const hasDurationSort = durationSortFilter !== "default";
+    const hasOrderSort = sortOrderFilter !== "default";
+
+    console.log("[Tour Filters] current-state", {
+      from,
+      to,
+      tourPriceRange,
+      tourMinRating,
+      selectedThemes,
+      tourSelectedAmenities,
+      sortOrderFilter,
+      durationSortFilter,
+    });
+
+    if (hasThemeFilters) {
+      const payload = {
+        ...baseParams,
+        themes: selectedThemes.join(","),
+      };
+      console.log("[Tour Filters] API /sort-tour/by-themes payload", payload);
+      await dispatch(
+        sortToursByThemes(payload)
+      );
+    } else if (hasPriceFilter) {
+      const payload = {
+        ...baseParams,
+        minPrice: tourPriceRange[0],
+        maxPrice: tourPriceRange[1],
+      };
+      console.log("[Tour Filters] API /sort-tour/by-price payload", payload);
+      await dispatch(
+        sortToursByPrice(payload)
+      );
+    } else if (hasDurationSort) {
+      const payload = {
+        ...baseParams,
+        order: durationSortFilter,
+      };
+      console.log("[Tour Filters] API /sort-tour/by-duration payload", payload);
+      await dispatch(
+        sortToursByDuration(payload)
+      );
+    } else if (hasOrderSort) {
+      const payload = {
+        ...baseParams,
+        order: sortOrderFilter,
+      };
+      console.log("[Tour Filters] API /sort-tour/by-order payload", payload);
+      await dispatch(
+        sortToursByOrder(payload)
+      );
+    } else if (from || to) {
+      console.log("[Tour Filters] API /search-tours/from-to payload", { from, to });
+      await dispatch(searchToursFromTo({ from, to }));
+    } else {
+      console.log("[Tour Filters] API /get-tour-list payload", {});
+      await dispatch(fetchTourList());
+    }
+
+    setShowFilterModal(false);
+    setShowTopFilterBar(false);
+  };
+
+  const handleClearAllFilters = async () => {
+    setTourPriceRange([0, 50000]);
+    setTourMinRating(0);
+    setTourSelectedAmenities([]);
+    setSelectedThemes([]);
+    setSortOrderFilter("default");
+    setDurationSortFilter("default");
+    setFromCity("");
+    setToCity("");
+    setSearchText("");
+    setShowTopFilterBar(true);
+    hasFromToSearchRef.current = false;
+
+    console.log("[Tour Filters] clear-all -> refetch payload", {});
+    await dispatch(fetchTourList());
+  };
+
+  const handleViewDetails = async (tourId) => {
+    if (!tourId) return;
+    setShowTourDetailModal(true);
+    await dispatch(fetchTourById(tourId));
+  };
+
+  const closeTourDetailModal = () => {
+    setShowTourDetailModal(false);
+    dispatch(resetSelectedTour());
+  };
 
   const headerBg = isDark ? "bg-slate-950" : "bg-slate-100";
   const titleColor = isDark ? "text-white" : "text-slate-900";
@@ -426,12 +545,13 @@ export default function Tour() {
             )}
           </View>
 
-          {/* ONLY ONE FILTER ROW (removed extra “Filters” chip) */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
-            {tourThemesList.slice(0, 10).map((theme) => (
-              <Chip key={theme} label={theme} active={selectedThemes.includes(theme)} onPress={() => toggleTheme(theme)} />
-            ))}
-          </ScrollView>
+          {showTopFilterBar && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
+              {tourThemesList.slice(0, 10).map((theme) => (
+                <Chip key={theme} label={theme} active={selectedThemes.includes(theme)} onPress={() => toggleTheme(theme)} />
+              ))}
+            </ScrollView>
+          )}
 
           {!!(selectedThemes.length || tourSelectedAmenities.length || tourMinRating || tourPriceRange[0] !== 0 || fromCity || toCity || searchText) && (
             <View className="mt-3 flex-row flex-wrap items-center" style={{ gap: 8 }}>
@@ -439,15 +559,7 @@ export default function Tour() {
                 <Text className="text-[12px] font-extrabold text-white">{filteredTours.length} results</Text>
               </View>
               <TouchableOpacity
-                onPress={() => {
-                  setTourPriceRange([0, 50000]);
-                  setTourMinRating(0);
-                  setTourSelectedAmenities([]);
-                  setSelectedThemes([]);
-                  setFromCity("");
-                  setToCity("");
-                  setSearchText("");
-                }}
+                onPress={handleClearAllFilters}
                 className="px-3 py-1.5 rounded-full bg-white border border-slate-200"
               >
                 <Text className="text-[12px] font-extrabold text-slate-600">Clear</Text>
@@ -490,7 +602,7 @@ export default function Tour() {
               key={tour?._id || `${tour?.travelAgencyName || "tour"}-${tour?.createdAt || Math.random()}`}
               tour={tour}
               onPressDetails={() => {
-                // navigation.navigate("TourDetails", { id: tour._id })
+                handleViewDetails(tour?._id);
               }}
             />
           ))}
@@ -552,6 +664,56 @@ export default function Tour() {
               </View>
 
               <View className="mt-6">
+                <Text className="text-[13px] font-black text-slate-900 mb-3">Sort By Order</Text>
+                <View className="flex-row" style={{ gap: 10 }}>
+                  {[
+                    { id: "default", label: "Default" },
+                    { id: "asc", label: "A-Z" },
+                    { id: "desc", label: "Z-A" },
+                  ].map((item) => {
+                    const isSelected = sortOrderFilter === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        onPress={() => setSortOrderFilter(item.id)}
+                        activeOpacity={0.9}
+                        className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                      >
+                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-600"}`}>
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className="mt-6">
+                <Text className="text-[13px] font-black text-slate-900 mb-3">Sort By Duration</Text>
+                <View className="flex-row" style={{ gap: 10 }}>
+                  {[
+                    { id: "default", label: "Default" },
+                    { id: "asc", label: "Short first" },
+                    { id: "desc", label: "Long first" },
+                  ].map((item) => {
+                    const isSelected = durationSortFilter === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        onPress={() => setDurationSortFilter(item.id)}
+                        activeOpacity={0.9}
+                        className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                      >
+                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-600"}`}>
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className="mt-6">
                 <Text className="text-[13px] font-black text-slate-900 mb-3">Themes</Text>
                 <View className="flex-row flex-wrap" style={{ gap: 10 }}>
                   {tourThemesList.map((theme, index) => {
@@ -592,12 +754,7 @@ export default function Tour() {
 
             <View className="flex-row mt-5 pt-4 border-t border-slate-100" style={{ gap: 12 }}>
               <TouchableOpacity
-                onPress={() => {
-                  setTourPriceRange([0, 50000]);
-                  setTourMinRating(0);
-                  setTourSelectedAmenities([]);
-                  setSelectedThemes([]);
-                }}
+                onPress={handleClearAllFilters}
                 activeOpacity={0.9}
                 className="flex-1 h-12 rounded-xl items-center justify-center bg-slate-100"
               >
@@ -605,13 +762,59 @@ export default function Tour() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => setShowFilterModal(false)}
+                onPress={handleApplyFilters}
                 activeOpacity={0.9}
                 className="flex-[2] h-12 rounded-xl items-center justify-center bg-[#0d3b8f]"
               >
                 <Text className="text-white font-black">Apply</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showTourDetailModal}
+        transparent
+        animationType="slide"
+        onRequestClose={closeTourDetailModal}
+      >
+        <View className="flex-1 bg-black/45 justify-end">
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-8">
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-[19px] font-black text-slate-900">Tour Details</Text>
+              <TouchableOpacity onPress={closeTourDetailModal} className="p-2 rounded-full bg-slate-100">
+                <Ionicons name="close" size={18} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedTourStatus === "loading" && (
+              <View className="py-6 items-center justify-center">
+                <ActivityIndicator size="small" color="#1d4ed8" />
+                <Text className="text-slate-500 mt-2">Loading details...</Text>
+              </View>
+            )}
+
+            {selectedTourStatus !== "loading" && !!selectedTour && (
+              <View>
+                <Text className="text-[18px] font-black text-slate-900">{selectedTour?.travelAgencyName || "Tour"}</Text>
+                <Text className="text-[13px] text-slate-600 mt-1">
+                  {getTourPlaces(selectedTour) || selectedTour?.city || "-"}
+                </Text>
+                <Text className="text-[13px] text-slate-500 mt-1">
+                  {`${toNumber(selectedTour?.nights)}N / ${toNumber(selectedTour?.days)}D`} • {formatINR(selectedTour?.price)} / person
+                </Text>
+                {!!selectedTour?.overview && (
+                  <Text className="text-[13px] text-slate-600 mt-3" numberOfLines={6}>
+                    {selectedTour.overview}
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {selectedTourStatus === "failed" && (
+              <Text className="text-red-600 text-[13px] font-semibold">Unable to load tour details.</Text>
+            )}
           </View>
         </View>
       </Modal>
