@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -26,6 +26,11 @@ import {
   updateUserProfile,
 } from "../store/slices/profileUpdateSlice";
 import { fetchFilteredBooking } from "../store/slices/bookingSlice";
+import {
+  fetchUserComplaints,
+  resetComplaintChatState,
+  sendComplaintChat,
+} from "../store/slices/complaintSlice";
 
 const TABS = ["Bookings", "Coupons", "Complaints", "Profile"];
 const BOOKING_TYPES = ["Tour", "Cabs", "Hotel"];
@@ -98,6 +103,19 @@ const formatLongDate = (dateValue) => {
     month: "short",
     year: "numeric",
   });
+};
+
+const formatDateTime = (dateValue) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "-";
+  return `${date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })} ${date.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 };
 
 const isExpiredCoupon = (coupon) => {
@@ -233,6 +251,10 @@ const Profile = ({ navigation }) => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
+  const [showComplaintChatModal, setShowComplaintChatModal] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const complaintChatScrollRef = useRef(null);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [updateForm, setUpdateForm] = useState({
@@ -246,6 +268,7 @@ const Profile = ({ navigation }) => {
   // --- Redux State ---
   const userState = useSelector((state) => state.user);
   const couponsState = useSelector((state) => state.coupons);
+  const complaintsState = useSelector((state) => state.complaints);
   const profileUpdateState = useSelector((state) => state.profileUpdate);
 
   // bookingSlice should store these keys (adjust if your slice uses different names)
@@ -261,7 +284,7 @@ const Profile = ({ navigation }) => {
   const user = userState?.data || {};
   const coupons = toList(couponsState?.items);
   const bookingHistory = toList(userState?.bookingData);
-  const complaints = toList(userState?.complaints);
+  const complaints = toList(complaintsState?.items);
 
   const profileImages = Array.isArray(user?.images) ? user.images.filter(Boolean) : [];
   const profileImage = profileImages[0] || user?.profile?.[0] || null;
@@ -272,6 +295,14 @@ const Profile = ({ navigation }) => {
     () => (complaints.length ? complaints : FALLBACK_COMPLAINTS),
     [complaints]
   );
+
+  const complaintChats = useMemo(() => {
+    const chats = toList(selectedComplaint?.chats);
+    return [...chats].sort(
+      (first, second) =>
+        new Date(first?.timestamp || 0).getTime() - new Date(second?.timestamp || 0).getTime()
+    );
+  }, [selectedComplaint?.chats]);
 
   const userId = useMemo(
     () => user?.userId || userState?.userId || null,
@@ -285,6 +316,31 @@ const Profile = ({ navigation }) => {
     dispatch(fetchProfileData());
     dispatch(fetchUserCoupons());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!userId) return;
+    dispatch(fetchUserComplaints({ userId }));
+  }, [dispatch, userId]);
+
+  useEffect(() => {
+    if (!selectedComplaint) return;
+    const updatedComplaint = complaintItems.find(
+      (complaint) =>
+        String(complaint?._id || "") === String(selectedComplaint?._id || "") ||
+        String(complaint?.complaintId || "") === String(selectedComplaint?.complaintId || "")
+    );
+    if (updatedComplaint) {
+      setSelectedComplaint(updatedComplaint);
+    }
+  }, [complaintItems, selectedComplaint]);
+
+  useEffect(() => {
+    if (!showComplaintChatModal) return;
+    const timer = setTimeout(() => {
+      complaintChatScrollRef.current?.scrollToEnd({ animated: false });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [showComplaintChatModal, complaintChats.length]);
 
   // Reset pagination when booking type/status changes
   useEffect(() => {
@@ -403,6 +459,45 @@ const Profile = ({ navigation }) => {
     setShowBookingModal(false);
     setSelectedBooking(null);
   };
+
+  const handleOpenComplaintChat = (complaint) => {
+    if (!complaint) return;
+    setSelectedComplaint(complaint);
+    setChatMessage("");
+    setShowComplaintChatModal(true);
+    dispatch(resetComplaintChatState());
+  };
+
+  const handleCloseComplaintChat = () => {
+    setShowComplaintChatModal(false);
+    setSelectedComplaint(null);
+    setChatMessage("");
+    dispatch(resetComplaintChatState());
+  };
+
+  const handleSendComplaintMessage = async () => {
+    const message = String(chatMessage || "").trim();
+    const complaintId = selectedComplaint?.complaintId;
+    if (!complaintId || !message) return;
+
+    try {
+      await dispatch(
+        sendComplaintChat({
+          complaintId,
+          message,
+          sender: user?.userName || user?.name || user?.email || "You",
+          receiver: "Admin",
+        })
+      ).unwrap();
+
+      setChatMessage("");
+      if (userId) {
+        dispatch(fetchUserComplaints({ userId }));
+      }
+    } catch {
+    }
+  };
+
   const onCopyCoupon = (code) => {
     // Optional: use Clipboard API if you have expo-clipboard
   };
@@ -590,10 +685,28 @@ const Profile = ({ navigation }) => {
     </View>
   );
 
-  const renderComplaints = () =>
-    complaintItems.map((complaint, index) => {
+  const renderComplaints = () => {
+    if (complaintsState?.status === "loading") {
+      return (
+        <View className="flex-row items-center mb-3">
+          <ActivityIndicator size="small" color="#2563eb" />
+          <Text className="text-sm text-slate-600 ml-2 font-medium">Loading complaints...</Text>
+        </View>
+      );
+    }
+
+    if (complaintsState?.status === "failed") {
+      return (
+        <Text className="text-xs text-red-600 font-bold mb-3">
+          {String(complaintsState?.error?.message || complaintsState?.error || "Unable to load complaints")}
+        </Text>
+      );
+    }
+
+    return complaintItems.map((complaint, index) => {
       const status = String(complaint?.status || "In Progress");
       const resolved = status.toLowerCase().includes("resolve");
+      const messageCount = toList(complaint?.chats).length;
 
       return (
         <View
@@ -607,7 +720,7 @@ const Profile = ({ navigation }) => {
 
             <View className="flex-1 mr-3">
               <Text className="text-base font-bold text-slate-900" numberOfLines={1}>
-                {complaint?.title || "Complaint"}
+                {complaint?.issue || complaint?.title || complaint?.regarding || "Complaint"}
               </Text>
               <Text className="text-xs text-slate-400 mt-0.5">ID: {complaint?.complaintId || "-"}</Text>
             </View>
@@ -620,14 +733,24 @@ const Profile = ({ navigation }) => {
           </View>
 
           <View className="pt-3 border-t border-slate-100 flex-row items-center justify-between">
-            <Text className="text-[11px] text-slate-400">Raised on: {complaint?.raisedOn || "-"}</Text>
-            <TouchableOpacity>
-              <Text className="text-xs font-bold text-blue-700">View Details</Text>
+            <Text className="text-[11px] text-slate-400">Raised on: {formatLongDate(complaint?.createdAt || complaint?.raisedOn)}</Text>
+            <TouchableOpacity
+              className="h-8 px-3 rounded-lg bg-indigo-600 items-center justify-center flex-row"
+              onPress={() => handleOpenComplaintChat(complaint)}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={13} color="#fff" />
+              <Text className="text-xs font-bold text-white ml-1.5">Open Chat</Text>
+              {!!messageCount && (
+                <View className="ml-2 px-1.5 h-4 rounded-full bg-white/25 items-center justify-center">
+                  <Text className="text-[10px] font-black text-white">{messageCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
       );
     });
+  };
 
   const renderProfileTab = () => (
     <View>
@@ -908,6 +1031,95 @@ const Profile = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </SafeAreaView>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent
+        visible={showComplaintChatModal}
+        onRequestClose={handleCloseComplaintChat}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+          <View className="flex-1 bg-black/45 justify-end">
+            <View className="bg-white rounded-t-3xl h-[82%] overflow-hidden">
+              <View className="px-4 py-3 bg-indigo-700 flex-row items-center justify-between">
+                <View>
+                  <Text className="text-white text-lg font-black">Complaint Chat</Text>
+                  <Text className="text-indigo-100 text-xs mt-0.5">ID: {selectedComplaint?.complaintId || "-"}</Text>
+                </View>
+                <TouchableOpacity onPress={handleCloseComplaintChat} className="w-8 h-8 rounded-full items-center justify-center bg-white/20">
+                  <Ionicons name="close" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                ref={complaintChatScrollRef}
+                className="flex-1 bg-slate-50 px-3 pt-3"
+                contentContainerStyle={{ paddingBottom: 14 }}
+                showsVerticalScrollIndicator={false}
+                onContentSizeChange={() => {
+                  if (showComplaintChatModal) {
+                    complaintChatScrollRef.current?.scrollToEnd({ animated: true });
+                  }
+                }}
+              >
+                {complaintChats.length ? (
+                  complaintChats.map((chat, idx) => {
+                    const sender = String(chat?.sender || "").toLowerCase();
+                    const mine =
+                      sender === String(user?.userName || "").toLowerCase() ||
+                      sender === String(user?.name || "").toLowerCase() ||
+                      sender === String(user?.email || "").toLowerCase() ||
+                      sender.includes("you");
+
+                    return (
+                      <View key={chat?._id || `${chat?.timestamp || "chat"}-${idx}`} className={`mb-3 ${mine ? "items-end" : "items-start"}`}>
+                        <View className={`max-w-[82%] px-3 py-2 rounded-2xl ${mine ? "bg-indigo-600" : "bg-white border border-slate-200"}`}>
+                          <Text className={`text-xs font-bold mb-1 ${mine ? "text-indigo-100" : "text-indigo-600"}`}>
+                            {mine ? "You" : chat?.sender || "Support Team"}
+                          </Text>
+                          <Text className={`text-base ${mine ? "text-white" : "text-slate-800"}`}>{chat?.content || "-"}</Text>
+                          <Text className={`text-[11px] mt-1 ${mine ? "text-indigo-100" : "text-slate-500"}`}>
+                            {formatDateTime(chat?.timestamp)}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <View className="items-center py-10">
+                    <Text className="text-sm text-slate-500 font-medium">No messages yet</Text>
+                  </View>
+                )}
+              </ScrollView>
+
+              <View className="p-3 border-t border-slate-200 bg-white flex-row items-center">
+                <TextInput
+                  value={chatMessage}
+                  onChangeText={setChatMessage}
+                  placeholder="Type your message..."
+                  className="flex-1 h-11 border border-slate-300 rounded-full px-4 text-slate-900"
+                  placeholderTextColor="#94a3b8"
+                />
+                <TouchableOpacity
+                  onPress={handleSendComplaintMessage}
+                  disabled={complaintsState?.chatStatus === "loading" || !String(chatMessage || "").trim()}
+                  className={`ml-2 h-11 px-4 rounded-full items-center justify-center ${
+                    complaintsState?.chatStatus === "loading" || !String(chatMessage || "").trim()
+                      ? "bg-indigo-300"
+                      : "bg-indigo-600"
+                  }`}
+                >
+                  {complaintsState?.chatStatus === "loading" ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text className="text-white font-bold">Send</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
