@@ -167,14 +167,14 @@ const BookingCard = ({ item, onViewBooking }) => {
       <View className="mt-3 bg-slate-50 rounded-xl border border-slate-100 p-3 flex-row items-center justify-between">
         <View>
           <Text className="text-[10px] font-bold text-slate-400">CHECK-IN</Text>
-          <Text className="text-sm font-bold text-slate-800">{item?.checkInDate || "-"}</Text>
+          <Text className="text-sm font-bold text-slate-800">{formatLongDate(item?.checkInDate)}</Text>
         </View>
 
         <Ionicons name="arrow-forward" size={18} color="#94a3b8" />
 
         <View style={{ alignItems: "flex-end" }}>
           <Text className="text-[10px] font-bold text-slate-400">CHECK-OUT</Text>
-          <Text className="text-sm font-bold text-slate-800">{item?.checkOutDate || "-"}</Text>
+          <Text className="text-sm font-bold text-slate-800">{formatLongDate(item?.checkOutDate)}</Text>
         </View>
       </View>
 
@@ -735,6 +735,9 @@ const Profile = ({ navigation }) => {
               <Text className="text-xs text-slate-500 mt-0.5 font-medium" numberOfLines={1}>
                 {user?.email || "rahul.sharma@example.com"}
               </Text>
+              <Text className="text-xs text-slate-400 mt-0.5" numberOfLines={1}>
+                {user?.address || "No address added"}
+              </Text>
             </View>
           </View>
 
@@ -744,23 +747,6 @@ const Profile = ({ navigation }) => {
           >
             <Ionicons name="create-outline" size={20} color="#1d4ed8" />
           </TouchableOpacity>
-        </View>
-
-        <View className="px-3 py-2 flex-row justify-between">
-          <View className="flex-1 mx-1 bg-blue-50 border border-blue-100 rounded-xl py-3 items-center">
-            <Text className="text-2xl font-black text-blue-900">{String(bookingCount).padStart(2, "0")}</Text>
-            <Text className="text-[10px] font-bold text-blue-700 tracking-wide mt-1">BOOKINGS</Text>
-          </View>
-
-          <View className="flex-1 mx-1 bg-emerald-50 border border-emerald-100 rounded-xl py-3 items-center">
-            <Text className="text-2xl font-black text-emerald-900">{String(coupons.length).padStart(2, "0")}</Text>
-            <Text className="text-[10px] font-bold text-emerald-700 tracking-wide mt-1">COUPONS</Text>
-          </View>
-
-          <View className="flex-1 mx-1 bg-purple-50 border border-purple-100 rounded-xl py-3 items-center">
-            <Text className="text-2xl font-black text-purple-900">{String(complaintItems.length).padStart(2, "0")}</Text>
-            <Text className="text-[10px] font-bold text-purple-700 tracking-wide mt-1">COMPLAINTS</Text>
-          </View>
         </View>
 
         <View className="border-t border-b border-slate-200 bg-white flex-row px-2">
@@ -841,14 +827,14 @@ const Profile = ({ navigation }) => {
             <View className="flex-row items-center justify-between bg-slate-50 border-y border-slate-100 px-5 py-3">
               <View>
                 <Text className="text-[9px] font-bold text-slate-400">CHECK-IN</Text>
-                <Text className="text-lg font-extrabold text-slate-900 mt-0.5">{selectedBooking?.checkInDate || "-"}</Text>
+                <Text className="text-lg font-extrabold text-slate-900 mt-0.5">{formatLongDate(selectedBooking?.checkInDate)}</Text>
               </View>
               <View>
                 <Text className="text-[10px] font-semibold text-slate-400">1 Night</Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text className="text-[9px] font-bold text-slate-400">CHECK-OUT</Text>
-                <Text className="text-lg font-extrabold text-slate-900 mt-0.5">{selectedBooking?.checkOutDate || "-"}</Text>
+                <Text className="text-lg font-extrabold text-slate-900 mt-0.5">{formatLongDate(selectedBooking?.checkOutDate)}</Text>
               </View>
             </View>
 

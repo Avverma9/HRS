@@ -82,7 +82,9 @@ export const createBooking = createAsyncThunk(
   "booking/createBooking",
   async (bookingPayload, { rejectWithValue }) => {
     try {
-      const res = await api.post("/booking/create", bookingPayload);
+      // Use /booking/:userId/:hotelId endpoint
+      const { userId, hotelId, ...restPayload } = bookingPayload;
+      const res = await api.post(`/booking/${userId}/${hotelId}`, restPayload);
       return res.data;
     } catch (err) {
       return rejectWithValue(err?.response?.data?.message || err?.message || "Failed");

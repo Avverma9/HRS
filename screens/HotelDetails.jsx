@@ -307,9 +307,9 @@ const HotelDetails = ({ navigation, route }) => {
   }, [dispatch, hotelId]);
 
   useEffect(() => {
-    if (user?.name && !guestName) setGuestName(user.name);
+    if ((user?.userName || user?.name) && !guestName) setGuestName(user?.userName || user?.name);
     if (user?.email && !guestEmail) setGuestEmail(user.email);
-    if (user?.phone && !guestPhone) setGuestPhone(user.phone);
+    if ((user?.mobile || user?.phone) && !guestPhone) setGuestPhone(user?.mobile || user?.phone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -772,27 +772,60 @@ const HotelDetails = ({ navigation, route }) => {
     }
 
     const userId = await getUserId();
+    if (!userId) {
+      Alert.alert("Login Required", "Please login to continue booking.");
+      return;
+    }
+
+    const selectedRoomPrice = parseNumber(
+      selectedRoomData?.__pricing?.nightlyPrice ?? getRoomBasePrice(selectedRoomData)
+    );
 
     const payload = {
-      userId: userId || "guest_user",
-      hotelId,
-      roomId: selectedRoomId,
+      userId: String(userId),
+      hotelId: String(hotelId),
       checkInDate: toDateOnly(checkInDate).toISOString(),
       checkOutDate: toDateOnly(checkOutDate).toISOString(),
       guests: guestsCount,
-      rooms: roomsCount,
-      guestName: name,
-      guestEmail: email,
-      guestPhone: phone,
-      totalAmount: pricing.finalTotal,
+      numRooms: roomsCount,
+      guestDetails: {
+        fullName: name,
+        mobile: phone,
+        email,
+      },
+      foodDetails: [],
+      roomDetails: [
+        {
+          roomId: String(selectedRoomId),
+          type: String(selectedRoomData?.name || selectedRoomData?.type || "Room"),
+          bedTypes: String(selectedRoomData?.bedTypes || selectedRoomData?.bedType || ""),
+          price: selectedRoomPrice,
+        },
+      ],
+      pm: "Online",
+      bookingSource: "App",
+      bookingStatus: "Confirmed",
       couponCode: appliedCoupon || undefined,
-      couponDiscount: pricing.discount || 0,
-      // helpful debug fields (optional)
-      appliedTaxPercent: pricing.appliedTaxPercent,
-      pricingSource: selectedRoomData?.__pricing?.isOverrideApplied ? "monthlyOverride" : "default",
+      discountPrice: pricing.discount || 0,
+      isPartialBooking: false,
+      partialAmount: 0,
+      destination:
+        basicInfo?.location?.city || basicInfo?.location?.state || hotel?.destination || "",
+      hotelName: basicInfo?.name || hotel?.hotelName || "",
+      hotelEmail: basicInfo?.email || hotel?.email || hotel?.hotelEmail || "",
+      hotelCity: basicInfo?.location?.city || hotel?.hotelCity || "",
+      hotelOwnerName:
+        basicInfo?.ownerName || hotel?.hotelOwnerName || hotel?.createdBy?.user || "",
     };
 
-    dispatch(createBooking(payload));
+    console.log('Booking payload:', payload);
+    dispatch(createBooking(payload))
+      .then((result) => {
+        console.log('Booking response:', result);
+      })
+      .catch((err) => {
+        console.log('Booking error:', err);
+      });
   };
 
   const handleGoBack = () => {
