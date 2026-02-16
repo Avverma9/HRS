@@ -59,6 +59,8 @@ const SearchCard = ({
   setRooms,
   isSearching,
   onSearch,
+  isLocatingCurrentLocation = false,
+  onUseCurrentLocation = () => {},
 }) => {
   return (
     <View className="-mt-6 mx-4 bg-white rounded-3xl shadow-xl shadow-slate-900/5 elevation-8 z-50">
@@ -83,6 +85,24 @@ const SearchCard = ({
             selectionColor="#3b82f6"
             returnKeyType="search"
           />
+
+          <TouchableOpacity
+            onPress={onUseCurrentLocation}
+            disabled={isLocatingCurrentLocation}
+            activeOpacity={0.7}
+            className="ml-2 px-2.5 py-1.5 rounded-full bg-blue-50 border border-blue-100 flex-row items-center"
+            style={{ gap: 4 }}
+          >
+            {isLocatingCurrentLocation ? (
+              <ActivityIndicator size="small" color="#2563eb" />
+            ) : (
+              <MaterialCommunityIcons name="crosshairs-gps" size={13} color="#2563eb" />
+            )}
+            <Text className="text-[10px] font-bold text-blue-700">
+              {isLocatingCurrentLocation ? "Locating" : "Near me"}
+            </Text>
+          </TouchableOpacity>
+
           {!!searchCity && (
             <TouchableOpacity
               onPress={() => setSearchCity("")}

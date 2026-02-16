@@ -228,6 +228,35 @@ export default function Tour() {
     return [...new Set(amenities)].filter(Boolean);
   }, [tours]);
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+
+    if (normalizePlaceToken(fromCity)) count += 1;
+    if (normalizePlaceToken(toCity)) count += 1;
+    if (String(searchText || "").trim()) count += 1;
+
+    if (tourPriceRange[0] !== 0 || tourPriceRange[1] !== 50000) count += 1;
+    if (tourMinRating > 0) count += 1;
+
+    count += selectedThemes.length;
+    count += tourSelectedAmenities.length;
+
+    if (sortOrderFilter !== "default") count += 1;
+    if (durationSortFilter !== "default") count += 1;
+
+    return count;
+  }, [
+    fromCity,
+    toCity,
+    searchText,
+    tourPriceRange,
+    tourMinRating,
+    selectedThemes,
+    tourSelectedAmenities,
+    sortOrderFilter,
+    durationSortFilter,
+  ]);
+
   const filteredTours = tours;
 
   const toggleTheme = (theme) => {
@@ -302,6 +331,7 @@ export default function Tour() {
   };
 
   const handleClearAllFilters = async () => {
+    setShowFilterModal(false);
     setTourPriceRange([0, 50000]);
     setTourMinRating(0);
     setTourSelectedAmenities([]);
@@ -350,9 +380,16 @@ export default function Tour() {
             <TouchableOpacity
               onPress={() => setShowFilterModal(true)}
               activeOpacity={0.9}
-              className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center"
+              className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center relative"
             >
               <Ionicons name="options-outline" size={18} color="#0f172a" />
+              {activeFilterCount > 0 && (
+                <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0d3b8f] border border-white items-center justify-center">
+                  <Text className="text-white text-[10px] font-black">
+                    {activeFilterCount > 99 ? "99+" : activeFilterCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 

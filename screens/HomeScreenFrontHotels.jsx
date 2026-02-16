@@ -159,6 +159,15 @@ export default function HomeScreenFrontHotels() {
 
   const handleNavigateAll = () => {
     if (navigation) {
+        const parentNavigation = navigation.getParent?.();
+        if (parentNavigation) {
+          parentNavigation.navigate("HotelsTab", {
+            screen: "Hotels",
+            params: { showAll: true },
+          });
+          return;
+        }
+
         navigation.navigate("Hotels", { showAll: true });
     }
   };

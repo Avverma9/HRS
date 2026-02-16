@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, StatusBar } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
+import * as Location from "expo-location";
 import { fetchLocation } from "../store/slices/locationSlice";
 import { searchHotel } from "../store/slices/hotelSlice";
 import Header from "../components/Header";
@@ -13,6 +14,7 @@ const Home = ({ navigation }) => {
   // --- State Management ---
   const [searchCity, setSearchCity] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [isLocatingCurrentLocation, setIsLocatingCurrentLocation] = useState(false);
   const [countRooms, setCountRooms] = useState(1);
   const [guests, setGuests] = useState(2);
 
@@ -136,6 +138,63 @@ const Home = ({ navigation }) => {
     }
   };
 
+  const withTimeout = (promise, timeoutMs = 10000) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Location request timed out")), timeoutMs);
+      }),
+    ]);
+
+  const handleUseCurrentLocation = async () => {
+    try {
+      if (isMountedRef.current) setIsLocatingCurrentLocation(true);
+
+      let permission = await Location.getForegroundPermissionsAsync();
+      if (permission?.status !== "granted") {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (permission?.status !== "granted") {
+        Alert.alert("Location permission required", "Allow location access to auto-fill your city.");
+        return;
+      }
+
+      const position = await withTimeout(
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        12000
+      );
+
+      const geocode = await withTimeout(
+        Location.reverseGeocodeAsync({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }),
+        12000
+      );
+
+      const place = geocode?.[0] || {};
+      const cityName =
+        place.city ||
+        place.subregion ||
+        place.district ||
+        place.region ||
+        place.name ||
+        "";
+
+      if (!cityName) {
+        Alert.alert("City not found", "Could not detect your city from current location.");
+        return;
+      }
+
+      setSearchCity(String(cityName).trim());
+    } catch (error) {
+      Alert.alert("Location error", "Unable to get your current city. Please try again.");
+    } finally {
+      if (isMountedRef.current) setIsLocatingCurrentLocation(false);
+    }
+  };
+
   const openCheckIn = () => {
     setDateModalTarget("in");
     setCalendarBase(new Date(checkInDate));
@@ -172,6 +231,8 @@ const Home = ({ navigation }) => {
           setRooms={setCountRooms}
           isSearching={isSearching}
           onSearch={handleSearch}
+          isLocatingCurrentLocation={isLocatingCurrentLocation}
+          onUseCurrentLocation={handleUseCurrentLocation}
         />
 
         <PopularDestinations locations={locations} onSelectLocation={handleSelect} />

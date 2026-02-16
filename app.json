@@ -13,14 +13,33 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to show nearby travel options and pickup points.",
+        "NSContactsUsageDescription": "We need contacts access to help with quick traveler details and emergency contact selection.",
+        "NSPhotoLibraryUsageDescription": "We need photo library access so you can upload profile and booking images.",
+        "NSPhotoLibraryAddUsageDescription": "We need permission to save travel-related images to your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "READ_CONTACTS",
+        "READ_PHONE_STATE",
+        "READ_PHONE_NUMBERS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "READ_CONTACTS",
+        "READ_PHONE_STATE",
+        "READ_PHONE_NUMBERS"
+      ],
+      "package": "com.anonymous.restra"
     },
     "web": {
       "favicon": "./assets/favicon.png",

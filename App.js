@@ -12,6 +12,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import ThemedStatusBar from './components/ThemedStatusBar';
+import { requestStartupPermissionsIfNeeded } from './utils/startupPermissions';
 
 import BootScreen from './screens/BootScreen';
 import LoginPage from './screens/LoginRN';
@@ -27,6 +28,7 @@ import Profile from './screens/Profile';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const SearchStack = createNativeStackNavigator();
+const HotelStack = createNativeStackNavigator();
 
 // Professional Tab Bar Component
 function TabBar({ state, descriptors, navigation }) {
@@ -72,6 +74,7 @@ function TabBar({ state, descriptors, navigation }) {
           let iconName = "alert-circle";
           switch (route.name) {
             case 'Search': iconName = isFocused ? "home" : "home-outline"; break; // home icon
+            case 'HotelsTab': iconName = isFocused ? "bed" : "bed-outline"; break;
             case 'Cabs': iconName = isFocused ? "car" : "car-outline"; break;
             case 'Tour': iconName = isFocused ? "map" : "map-outline"; break;
             case 'Profile': iconName = isFocused ? "person-circle" : "person-circle-outline"; break;
@@ -117,6 +120,15 @@ function SearchStackNavigator() {
   );
 }
 
+function HotelStackNavigator() {
+  return (
+    <HotelStack.Navigator screenOptions={{ headerShown: false }}>
+      <HotelStack.Screen name="Hotels" component={Hotels} initialParams={{ showAll: true }} />
+      <HotelStack.Screen name="HotelDetails" component={HotelDetails} />
+    </HotelStack.Navigator>
+  );
+}
+
 function TabNavigator() {
   return (
     <Tab.Navigator
@@ -131,6 +143,18 @@ function TabNavigator() {
           return {
             title: 'Home',
             tabBarLabel: 'Home',
+            tabBarStyle: routeName === "HotelDetails" ? { display: "none" } : undefined,
+          };
+        }}
+      />
+      <Tab.Screen
+        name="HotelsTab"
+        component={HotelStackNavigator}
+        options={({ route }) => {
+          const routeName = getFocusedRouteNameFromRoute(route) ?? "Hotels";
+          return {
+            title: 'Hotels',
+            tabBarLabel: 'Hotels',
             tabBarStyle: routeName === "HotelDetails" ? { display: "none" } : undefined,
           };
         }}
@@ -158,6 +182,20 @@ function RootNavigator() {
     const timer = setTimeout(() => setShowBoot(false), 3000);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (showBoot) return undefined;
+
+    (async () => {
+      try {
+        await requestStartupPermissionsIfNeeded();
+      } catch {
+        // Keep app startup non-blocking even if permission request fails.
+      }
+    })();
+
+    return undefined;
+  }, [showBoot]);
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>

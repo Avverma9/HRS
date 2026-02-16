@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -55,6 +55,15 @@ const Hotels = ({ navigation, route }) => {
   const [selectedAmenities, setSelectedAmenities] = useState([]);
   const [selectedBedTypes, setSelectedBedTypes] = useState([]);
   const [selectedRoomTypes, setSelectedRoomTypes] = useState([]);
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (priceRange) count += 1;
+    if (selectedStar) count += 1;
+    count += selectedAmenities.length;
+    count += selectedBedTypes.length;
+    count += selectedRoomTypes.length;
+    return count;
+  }, [priceRange, selectedStar, selectedAmenities, selectedBedTypes, selectedRoomTypes]);
 
   const topPadding = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 
@@ -136,12 +145,29 @@ const Hotels = ({ navigation, route }) => {
     }
   };
 
-  const clearFilters = () => {
+  const clearFilters = async () => {
+    setShowFilterModal(false);
     setPriceRange(null);
     setSelectedStar(null);
     setSelectedAmenities([]);
     setSelectedBedTypes([]);
     setSelectedRoomTypes([]);
+
+    const city = String(localCity || searchQuery || "").trim();
+    if (city) {
+      await dispatch(
+        searchHotel({
+          city,
+          checkInDate: localCheckIn,
+          checkOutDate: localCheckOut,
+          guests: localGuests ? Number(localGuests) : 1,
+          countRooms: localRooms ? Number(localRooms) : 1,
+        })
+      );
+      return;
+    }
+
+    await dispatch(searchHotel({ page: 1, limit: 50 }));
   };
 
   const applyFilters = () => {
@@ -406,10 +432,17 @@ const Hotels = ({ navigation, route }) => {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
               <TouchableOpacity 
                 onPress={() => setShowFilterModal(true)}
-                className="flex-row items-center border border-slate-300 rounded-full px-3 py-1.5 mr-2 bg-slate-50"
+                className="flex-row items-center border border-slate-300 rounded-full px-3 py-1.5 mr-2 bg-slate-50 relative"
               >
                   <Ionicons name="options-outline" size={16} color="#0f172a" style={{ marginRight: 6}} />
                   <Text className="text-xs font-bold text-slate-900">Filters</Text>
+                  {activeFilterCount > 0 && (
+                    <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0d3b8f] border border-white items-center justify-center">
+                      <Text className="text-white text-[10px] font-black">
+                        {activeFilterCount > 99 ? "99+" : activeFilterCount}
+                      </Text>
+                    </View>
+                  )}
               </TouchableOpacity>
 
               <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
