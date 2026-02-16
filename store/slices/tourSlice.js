@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../utils/api";
+import { getUserId } from "../../utils/credentials";
 
 const normalizeTourResponse = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -55,6 +56,98 @@ export const fetchTourById = createAsyncThunk(
   }
 );
 
+export const tourBooking = createAsyncThunk(
+  "tour/tourBooking",
+  async (payload = {}, { rejectWithValue }) => {
+    try {
+      const resolvedUserId = payload?.userId || (await getUserId());
+      const tourId = payload?.tourId || payload?.id;
+      const vehicleId = payload?.vehicleId;
+
+      if (!resolvedUserId) {
+        return rejectWithValue({ message: "Please login to continue booking." });
+      }
+      if (!tourId) {
+        return rejectWithValue({ message: "Tour ID is required for booking." });
+      }
+      if (!vehicleId) {
+        return rejectWithValue({ message: "Vehicle ID is required for booking." });
+      }
+
+      const {
+        userId,
+        id,
+        tourId: removedTourId,
+        seats = [],
+        numberOfAdults = 0,
+        numberOfChildren = 0,
+        passengers = [],
+        from,
+        to,
+        tourStartDate,
+        payment,
+        tax = 0,
+        discount = 0,
+        bookingSource = "App",
+      } = payload;
+
+      const bookingPayload = {
+        userId: resolvedUserId,
+        tourId,
+        vehicleId,
+        bookingSource,
+        seats,
+        numberOfAdults,
+        numberOfChildren,
+        passengers,
+        from,
+        to,
+        tourStartDate,
+        payment,
+        tax,
+        discount,
+      };
+
+      const response = await api.post("/tour-booking/create-tour-booking", bookingPayload);
+      return {
+        data: response?.data?.data || response?.data || null,
+        message: response?.data?.message || "Booking created successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        error?.response?.data || { message: error?.message || "Unable to create tour booking" }
+      );
+    }
+  }
+);
+
+export const fetchUserTourBookings = createAsyncThunk(
+  "tour/fetchUserTourBookings",
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const resolvedUserId = params?.userId || (await getUserId());
+      if (!resolvedUserId) {
+        return rejectWithValue({ message: "Please login to view tour bookings." });
+      }
+
+      const { userId, ...rest } = params;
+      const response = await api.get("/tour-booking/get-users-booking", {
+        params: {
+          userId: resolvedUserId,
+          ...rest,
+        },
+      });
+
+      const payload = response?.data?.data || response?.data || [];
+      return Array.isArray(payload) ? payload : [];
+    } catch (error) {
+      return rejectWithValue(
+        error?.response?.data || { message: error?.message || "Unable to fetch tour bookings" }
+      );
+    }
+  }
+);
+
 const tourSlice = createSlice({
   name: "tour",
   initialState: {
@@ -65,6 +158,13 @@ const tourSlice = createSlice({
     selectedTour: null,
     selectedTourStatus: "idle",
     selectedTourError: null,
+    tourBookingStatus: "idle",
+    tourBookingError: null,
+    tourBookingReference: null,
+    tourBookingResponse: null,
+    userTourBookings: [],
+    userTourBookingsStatus: "idle",
+    userTourBookingsError: null,
   },
   reducers: {
     resetTourState: (state) => {
@@ -75,11 +175,29 @@ const tourSlice = createSlice({
       state.selectedTour = null;
       state.selectedTourStatus = "idle";
       state.selectedTourError = null;
+      state.tourBookingStatus = "idle";
+      state.tourBookingError = null;
+      state.tourBookingReference = null;
+      state.tourBookingResponse = null;
+      state.userTourBookings = [];
+      state.userTourBookingsStatus = "idle";
+      state.userTourBookingsError = null;
     },
     resetSelectedTour: (state) => {
       state.selectedTour = null;
       state.selectedTourStatus = "idle";
       state.selectedTourError = null;
+    },
+    resetTourBookingState: (state) => {
+      state.tourBookingStatus = "idle";
+      state.tourBookingError = null;
+      state.tourBookingReference = null;
+      state.tourBookingResponse = null;
+    },
+    resetUserTourBookings: (state) => {
+      state.userTourBookings = [];
+      state.userTourBookingsStatus = "idle";
+      state.userTourBookingsError = null;
     },
   },
   extraReducers: (builder) => {
@@ -124,9 +242,44 @@ const tourSlice = createSlice({
         state.selectedTourStatus = "failed";
         state.selectedTourError = action.payload || { message: "Failed to load tour details" };
         state.selectedTour = null;
+      })
+      .addCase(tourBooking.pending, (state) => {
+        state.tourBookingStatus = "loading";
+        state.tourBookingError = null;
+      })
+      .addCase(tourBooking.fulfilled, (state, action) => {
+        state.tourBookingStatus = "succeeded";
+        state.tourBookingResponse = action.payload || null;
+        state.tourBookingReference =
+          action.payload?.data?.bookingId ||
+          action.payload?.data?.data?.bookingId ||
+          action.payload?.data?._id ||
+          null;
+      })
+      .addCase(tourBooking.rejected, (state, action) => {
+        state.tourBookingStatus = "failed";
+        state.tourBookingError = action.payload || { message: "Failed to create tour booking" };
+      })
+      .addCase(fetchUserTourBookings.pending, (state) => {
+        state.userTourBookingsStatus = "loading";
+        state.userTourBookingsError = null;
+      })
+      .addCase(fetchUserTourBookings.fulfilled, (state, action) => {
+        state.userTourBookingsStatus = "succeeded";
+        state.userTourBookings = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchUserTourBookings.rejected, (state, action) => {
+        state.userTourBookingsStatus = "failed";
+        state.userTourBookingsError =
+          action.payload || { message: "Failed to fetch user tour bookings" };
       });
   },
 });
 
-export const { resetTourState, resetSelectedTour } = tourSlice.actions;
+export const {
+  resetTourState,
+  resetSelectedTour,
+  resetTourBookingState,
+  resetUserTourBookings,
+} = tourSlice.actions;
 export default tourSlice.reducer;

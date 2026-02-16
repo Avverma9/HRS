@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useContext, useRef } from "react";
+import React, { useContext, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -11,27 +11,41 @@ import {
 } from "react-native";
 import { NavigationContext } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-import { frontHotels } from "../store/slices/hotelSlice";
 import { Ionicons } from "@expo/vector-icons";
+import { fetchTourList } from "../store/slices/tourSlice";
 
-// ---------- helpers ----------
 const safeText = (v, fallback = "") =>
   typeof v === "string" ? v.trim() || fallback : fallback;
 
-const getFirstImage = (hotel) =>
-  hotel?.images?.[0] || hotel?.rooms?.[0]?.images?.[0] || "";
-
-const getMinPrice = (hotel) => {
-  const prices = (hotel?.rooms || [])
-    .map((r) => Number(r?.price))
-    .filter((p) => Number.isFinite(p) && p > 0);
-  return prices.length ? Math.min(...prices) : null;
+const toNumber = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const parsed = Number(String(value || "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const formatRating = (r) => {
-  const n = Number(r);
-  if (!Number.isFinite(n) || n <= 0) return "4.2"; // Default fallback for design
-  return Math.max(0, Math.min(5, n)).toFixed(1);
+const getPlaces = (tour) => {
+  const raw = safeText(tour?.visitngPlaces || tour?.visitingPlaces || "");
+  if (!raw) return "Tour Package";
+  const places = raw
+    .split(/\||,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return places.slice(0, 2).join(", ") || "Tour Package";
+};
+
+const getFirstImage = (tour) => tour?.images?.[0] || "";
+
+const formatINR = (value) => {
+  const amount = toNumber(value);
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `Rs ${amount}`;
+  }
 };
 
 function TinyFireIcon() {
@@ -66,14 +80,14 @@ function TinyFireIcon() {
   );
 }
 
-const HotelCard = ({ hotel, onPress }) => {
-  const title = safeText(hotel?.hotelName, "Hotel Name");
-  const city = safeText(hotel?.city, "Location");
-  const rating = formatRating(hotel?.rating);
-  const img = getFirstImage(hotel);
-  const price = getMinPrice(hotel) || 1500;
-  // Calculate a fake "original" price for display purposes (e.g. +20-40%)
-  const originalPrice = Math.round(price * 1.35);
+const TourCard = ({ tour, onPress }) => {
+  const title = getPlaces(tour);
+  const city = safeText(tour?.city, "Location");
+  const rating = toNumber(tour?.starRating) || 4.2;
+  const nights = toNumber(tour?.nights);
+  const days = toNumber(tour?.days);
+  const image = getFirstImage(tour);
+  const price = toNumber(tour?.price) || 9999;
 
   return (
     <TouchableOpacity
@@ -82,55 +96,43 @@ const HotelCard = ({ hotel, onPress }) => {
       className="w-[260px] mr-4 mb-2"
     >
       <View className="bg-white rounded-[18px] shadow-sm elevation-3 border border-slate-100 overflow-hidden pb-3">
-        {/* Image */}
         <View className="relative">
-          {img ? (
-            <Image 
-              source={{ uri: img }} 
-              className="w-full h-40 bg-slate-200" 
-              resizeMode="cover" 
-            />
+          {image ? (
+            <Image source={{ uri: image }} className="w-full h-40 bg-slate-200" resizeMode="cover" />
           ) : (
             <View className="w-full h-40 bg-slate-200 items-center justify-center">
-              <Ionicons name="image-outline" size={32} color="#cbd5e1" />
+              <Ionicons name="images-outline" size={30} color="#cbd5e1" />
             </View>
           )}
-        </View>
 
-        {/* Content */}
-        <View className="px-3 pt-3">
-          {/* Title & Rating Row */}
-          <View className="flex-row items-start justify-between">
-            <Text 
-              className="text-slate-900 font-bold text-[16px] flex-1 mr-2 leading-tight" 
-              numberOfLines={1}
-            >
-              {title}
-            </Text>
-            
-            {/* Rating Badge */}
-            <View className="bg-green-600 px-1.5 py-0.5 rounded flex-row items-center shadow-sm">
-              <Text className="text-white font-bold text-[11px] mr-0.5">{rating}</Text>
-              <Ionicons name="star" size={9} color="white" />
-            </View>
+          <View className="absolute top-2 left-2 px-2 py-1 rounded-full bg-white/95 border border-slate-200 flex-row items-center">
+            <Ionicons name="star" size={10} color="#f59e0b" />
+            <Text className="text-[10px] text-slate-800 font-extrabold ml-1">{rating.toFixed(1)}</Text>
           </View>
 
-          {/* Location Row */}
+          <View className="absolute top-2 right-2 px-2 py-1 rounded-full bg-white/95 border border-slate-200 flex-row items-center">
+            <Ionicons name="moon" size={10} color="#1e3a8a" />
+            <Text className="text-[10px] text-slate-800 font-extrabold ml-1">{`${nights || 0}N / ${days || 0}D`}</Text>
+          </View>
+        </View>
+
+        <View className="px-3 pt-3">
+          <Text className="text-slate-900 font-bold text-[15px] leading-tight" numberOfLines={2}>
+            {title}
+          </Text>
+
           <View className="flex-row items-center mt-1">
-            <Ionicons name="location-outline" size={13} color="#94a3b8" style={{marginLeft: -2}} />
-            <Text className="text-slate-500 text-[12px] font-medium ml-0.5" numberOfLines={1}>
+            <Ionicons name="location-outline" size={13} color="#94a3b8" />
+            <Text className="text-slate-500 text-[12px] font-medium ml-1" numberOfLines={1}>
               {city}
             </Text>
           </View>
 
-          {/* Price Row */}
           <View className="flex-row items-baseline mt-3">
             <Text className="text-[#0d3b8f] font-extrabold text-[18px]">
-              ₹{price.toLocaleString()}
+              {formatINR(price)}
             </Text>
-            <Text className="text-slate-400 text-[12px] font-medium line-through ml-2">
-              ₹{originalPrice.toLocaleString()}
-            </Text>
+            <Text className="text-slate-500 text-[11px] font-semibold ml-1">/ person</Text>
           </View>
         </View>
       </View>
@@ -139,7 +141,7 @@ const HotelCard = ({ hotel, onPress }) => {
 };
 
 const SkeletonCard = () => (
-  <View className="w-[270px] mr-4 bg-white rounded-[22px] overflow-hidden border border-slate-100">
+  <View className="w-[260px] mr-4 bg-white rounded-[18px] overflow-hidden border border-slate-100">
     <View className="w-full h-40 bg-slate-200" />
     <View className="p-3">
       <View className="h-4 bg-slate-200 rounded w-2/3 mb-2" />
@@ -149,63 +151,63 @@ const SkeletonCard = () => (
   </View>
 );
 
-export default function HomeScreenFrontHotels() {
+export default function HomeScreenFrontTour() {
   const navigation = useContext(NavigationContext);
   const dispatch = useDispatch();
-  // Use separate featured* state properties
-  const { featuredData: hotelsRaw, featuredLoading: loading, featuredError: error } = useSelector((state) => state.hotel);
+  const { items: toursRaw, status, error } = useSelector((state) => state.tour);
 
   useEffect(() => {
-    dispatch(frontHotels());
-  }, [dispatch]);
-
-  const handleNavigate = (hotelId) => {
-    if (navigation) {
-        navigation.navigate("HotelDetails", { hotelId });
-    } else {
-        console.warn("Navigation context is missing in HomeScreenFrontHotels");
+    if (status === "idle") {
+      dispatch(fetchTourList());
     }
+  }, [dispatch, status]);
+
+  const tours = useMemo(() => (Array.isArray(toursRaw) ? toursRaw : []), [toursRaw]);
+  const topTours = useMemo(() => tours.slice(0, 5), [tours]);
+
+  const navigateToTours = () => {
+    if (!navigation) return;
+    const parent = navigation.getParent?.();
+    if (parent?.navigate) {
+      parent.navigate("Tour");
+      return;
+    }
+    navigation.navigate?.("Tour");
   };
 
-  const handleNavigateAll = () => {
-    if (navigation) {
-        navigation.navigate("Hotels", { showAll: true });
+  const openTourDetails = (tourId) => {
+    if (!tourId) {
+      navigateToTours();
+      return;
     }
+    navigation?.navigate?.("TourDetails", { tourId });
   };
-
-  const hotels = useMemo(() => (Array.isArray(hotelsRaw) ? hotelsRaw : []), [hotelsRaw]);
 
   return (
-    <View className="flex-1 bg-white">
-      {/* Header */}
+    <View className="flex-1 bg-white mt-1">
       <View className="px-4 pt-4">
         <View className="flex-row items-end justify-between">
           <View>
             <View className="flex-row items-center" style={{ gap: 5 }}>
-              <Text className="text-[18px] font-extrabold text-slate-900">
-                Featured Hotels
-              </Text>
+              <Text className="text-[18px] font-extrabold text-slate-900">Explore Tours</Text>
               <TinyFireIcon />
             </View>
             <Text className="text-[12px] text-slate-500 font-semibold mt-0.5">
-              Handpicked stays for you
+              Top 5 tours right now
             </Text>
           </View>
 
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={handleNavigateAll}
+            onPress={navigateToTours}
             className="px-3 py-1.5 rounded-full bg-slate-100"
           >
-            <Text className="text-[11px] font-extrabold text-slate-700">
-              View all →
-            </Text>
+            <Text className="text-[11px] font-extrabold text-slate-700">  View all →</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* States */}
-      {loading ? (
+      {status === "loading" ? (
         <View className="mt-4">
           <ScrollView
             horizontal
@@ -219,22 +221,22 @@ export default function HomeScreenFrontHotels() {
           <View className="items-center mt-2">
             <ActivityIndicator size="small" color="#0d3b8f" />
             <Text className="text-[11px] text-slate-500 font-semibold mt-2">
-              Loading featured hotels...
+              Loading tours...
             </Text>
           </View>
         </View>
-      ) : error ? (
+      ) : status === "failed" ? (
         <View className="px-4 mt-6">
           <View className="p-4 rounded-2xl bg-red-50 border border-red-100">
             <Text className="text-red-600 font-extrabold text-[13px]">
-              Something went wrong
+              Unable to fetch tours
             </Text>
             <Text className="text-red-600/90 text-[12px] font-semibold mt-1">
-              {String(error)}
+              {String(error?.message || error || "Please try again.")}
             </Text>
 
             <TouchableOpacity
-              onPress={() => dispatch(frontHotels())}
+              onPress={() => dispatch(fetchTourList())}
               activeOpacity={0.85}
               className="mt-3 bg-red-600 rounded-xl py-3 items-center"
             >
@@ -242,19 +244,19 @@ export default function HomeScreenFrontHotels() {
             </TouchableOpacity>
           </View>
         </View>
-      ) : hotels.length === 0 ? (
+      ) : topTours.length === 0 ? (
         <View className="px-4 mt-10 items-center">
           <View className="w-14 h-14 rounded-2xl bg-slate-100 items-center justify-center">
-            <Text className="text-[22px]">🏨</Text>
+            <Ionicons name="map-outline" size={24} color="#94a3b8" />
           </View>
           <Text className="text-slate-900 font-extrabold text-[14px] mt-3">
-            No featured hotels yet
+            No tours available
           </Text>
           <Text className="text-slate-500 font-semibold text-[12px] mt-1 text-center">
-            Try again in a moment.
+            Please check again shortly.
           </Text>
           <TouchableOpacity
-            onPress={() => dispatch(frontHotels())}
+            onPress={() => dispatch(fetchTourList())}
             activeOpacity={0.85}
             className="mt-4 bg-[#0d3b8f] rounded-2xl px-5 py-3"
           >
@@ -267,11 +269,11 @@ export default function HomeScreenFrontHotels() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
         >
-          {hotels.map((hotel, idx) => (
-            <HotelCard
-              key={hotel._id || hotel.hotelId || idx}
-              hotel={hotel}
-              onPress={() => handleNavigate(hotel.hotelId)}
+          {topTours.map((tour, idx) => (
+            <TourCard
+              key={tour?._id || `${tour?.travelAgencyName || "tour"}-${idx}`}
+              tour={tour}
+              onPress={() => openTourDetails(tour?._id)}
             />
           ))}
         </ScrollView>

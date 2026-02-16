@@ -34,6 +34,7 @@ import {
   resetComplaintChatState,
   sendComplaintChat,
 } from "../store/slices/complaintSlice";
+import { fetchUserTourBookings } from "../store/slices/tourSlice";
 
 const TABS = ["Bookings", "Coupons", "Complaints", "Profile"];
 const BOOKING_TYPES = ["Tour", "Cabs", "Hotel"];
@@ -245,6 +246,102 @@ const ProfileTabSkeleton = () => (
   </View>
 );
 
+const TourBookingCardSkeleton = () => (
+  <View className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+    <View className="flex-row items-start justify-between">
+      <View className="flex-1 mr-3">
+        <SkeletonShimmer height={16} width="78%" radius={7} />
+        <SkeletonShimmer height={11} width="62%" radius={6} style={{ marginTop: 8 }} />
+      </View>
+      <SkeletonShimmer height={28} width={92} radius={999} />
+    </View>
+
+    <View className="mt-3 flex-row items-center justify-between">
+      <SkeletonShimmer height={11} width={84} radius={6} />
+      <SkeletonShimmer height={18} width={90} radius={6} />
+    </View>
+  </View>
+);
+
+const HotelBookingCardSkeleton = () => (
+  <View className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+    <View className="flex-row items-start justify-between">
+      <View className="flex-1 mr-3">
+        <SkeletonShimmer height={16} width="54%" radius={7} />
+        <SkeletonShimmer height={11} width="66%" radius={6} style={{ marginTop: 8 }} />
+        <SkeletonShimmer height={10} width="44%" radius={6} style={{ marginTop: 6 }} />
+      </View>
+      <SkeletonShimmer height={26} width={86} radius={999} />
+    </View>
+
+    <View className="mt-3 bg-slate-50 rounded-xl border border-slate-100 p-3">
+      <View className="flex-row items-center justify-between">
+        <View>
+          <SkeletonShimmer height={10} width={68} radius={6} />
+          <SkeletonShimmer height={13} width={82} radius={6} style={{ marginTop: 6 }} />
+        </View>
+        <SkeletonShimmer height={10} width={14} radius={6} />
+        <View style={{ alignItems: "flex-end" }}>
+          <SkeletonShimmer height={10} width={68} radius={6} />
+          <SkeletonShimmer height={13} width={82} radius={6} style={{ marginTop: 6 }} />
+        </View>
+      </View>
+    </View>
+
+    <View className="flex-row mt-3">
+      <View className="flex-1 mr-3">
+        <SkeletonShimmer height={11} width="86%" radius={6} />
+      </View>
+      <View className="flex-1">
+        <SkeletonShimmer height={11} width="78%" radius={6} />
+      </View>
+    </View>
+
+    <View className="mt-3 border-t border-slate-100 pt-3 flex-row items-center justify-between">
+      <View>
+        <SkeletonShimmer height={10} width={92} radius={6} />
+        <SkeletonShimmer height={22} width={120} radius={6} style={{ marginTop: 8 }} />
+      </View>
+      <SkeletonShimmer height={40} width={110} radius={10} />
+    </View>
+  </View>
+);
+
+const CouponCardSkeleton = () => (
+  <View className="bg-white rounded-xl border-2 border-dashed border-blue-200 p-4 mb-3">
+    <View className="flex-row items-start justify-between">
+      <View className="flex-1 mr-3">
+        <SkeletonShimmer height={28} width={160} radius={7} />
+        <SkeletonShimmer height={12} width="58%" radius={6} style={{ marginTop: 8 }} />
+      </View>
+      <SkeletonShimmer height={40} width={40} radius={10} />
+    </View>
+    <View className="h-[1px] bg-slate-200 my-3" />
+    <View className="flex-row items-center justify-between">
+      <SkeletonShimmer height={11} width={126} radius={6} />
+      <SkeletonShimmer height={14} width={88} radius={6} />
+    </View>
+  </View>
+);
+
+const ComplaintCardSkeleton = () => (
+  <View className="bg-white rounded-xl border border-slate-200 p-4 mb-3 shadow-sm">
+    <View className="flex-row items-center mb-3">
+      <SkeletonShimmer height={40} width={40} radius={999} />
+      <View className="flex-1 ml-3 mr-3">
+        <SkeletonShimmer height={14} width="66%" radius={6} />
+        <SkeletonShimmer height={10} width="42%" radius={6} style={{ marginTop: 8 }} />
+      </View>
+      <SkeletonShimmer height={24} width={74} radius={6} />
+    </View>
+
+    <View className="pt-3 border-t border-slate-100 flex-row items-center justify-between">
+      <SkeletonShimmer height={11} width={124} radius={6} />
+      <SkeletonShimmer height={30} width={94} radius={8} />
+    </View>
+  </View>
+);
+
 const BookingCard = ({ item, onViewBooking }) => {
   const hotelName = item?.hotelDetails?.hotelName || "Hotel";
   const destination = item?.destination || item?.hotelDetails?.destination || "-";
@@ -362,6 +459,7 @@ const Profile = ({ navigation }) => {
   const couponsState = useSelector((state) => state.coupons);
   const complaintsState = useSelector((state) => state.complaints);
   const profileUpdateState = useSelector((state) => state.profileUpdate);
+  const tourState = useSelector((state) => state.tour);
 
   // bookingSlice should store these keys (adjust if your slice uses different names)
   const bookingState = useSelector((state) => state.booking);
@@ -372,6 +470,9 @@ const Profile = ({ navigation }) => {
   const bookingLoading = bookingState?.filteredBookingsStatus === "loading";
   const bookingError = bookingState?.filteredBookingsError;
   const bookingPagination = filteredBookingsEnvelope?.pagination || null;
+  const tourBookings = Array.isArray(tourState?.userTourBookings) ? tourState.userTourBookings : [];
+  const tourBookingsLoading = tourState?.userTourBookingsStatus === "loading";
+  const tourBookingsError = tourState?.userTourBookingsError;
 
   const user = userState?.data || {};
   const coupons = toList(couponsState?.items);
@@ -439,10 +540,9 @@ const Profile = ({ navigation }) => {
     setPage(1);
   }, [bookingType, bookingStatusFilter]);
 
-  // Fetch filtered bookings (Hotel tab only)
+  // Fetch bookings based on selected booking type
   useEffect(() => {
     if (activeTab !== "Bookings") return;
-    if (bookingType !== "Hotel") return;
     if (!userId) return;
 
     const payload = {
@@ -451,11 +551,18 @@ const Profile = ({ navigation }) => {
       limit,
     };
 
-    if (bookingStatusFilter !== "All") {
+    if (bookingType !== "Tour" && bookingStatusFilter !== "All") {
       payload.selectedStatus = bookingStatusFilter;
     }
 
-    dispatch(fetchFilteredBooking(payload));
+    if (bookingType === "Hotel") {
+      dispatch(fetchFilteredBooking(payload));
+      return;
+    }
+
+    if (bookingType === "Tour") {
+      dispatch(fetchUserTourBookings(payload));
+    }
   }, [dispatch, activeTab, bookingType, bookingStatusFilter, userId, page]);
 
   useEffect(() => {
@@ -596,6 +703,7 @@ const Profile = ({ navigation }) => {
 
   const renderBookings = () => {
     const isHotel = bookingType === "Hotel";
+    const isTour = bookingType === "Tour";
 
     return (
       <View className="flex-1">
@@ -614,7 +722,68 @@ const Profile = ({ navigation }) => {
           })}
         </View>
 
-        {!isHotel ? (
+        {isTour ? (
+          <View className="flex-1">
+            {tourBookingsLoading && (
+              <View>
+                {[0, 1, 2].map((idx) => (
+                  <TourBookingCardSkeleton key={`tour-skeleton-${idx}`} />
+                ))}
+              </View>
+            )}
+
+            {!!tourBookingsError && !tourBookingsLoading && (
+              <View className="bg-white rounded-xl border border-red-200 p-4">
+                <Text className="text-xs text-red-600 font-bold">
+                  {String(tourBookingsError?.message || tourBookingsError || "Unable to load tour bookings")}
+                </Text>
+              </View>
+            )}
+
+            {!tourBookingsLoading && !tourBookingsError && (
+              <>
+                {tourBookings.length ? (
+                  tourBookings.map((item, index) => (
+                    <View
+                      key={item?._id || item?.bookingId || String(index)}
+                      className="bg-white rounded-2xl border border-slate-200 p-4 mb-3"
+                    >
+                      <View className="flex-row items-start justify-between">
+                        <View className="flex-1 mr-3">
+                          <Text className="text-base font-extrabold text-slate-900" numberOfLines={2}>
+                            {item?.visitngPlaces || item?.travelAgencyName || "Tour Booking"}
+                          </Text>
+                          <Text className="text-xs text-slate-500 mt-1" numberOfLines={1}>
+                            {item?.city || item?.state || "-"} • {item?.travelAgencyName || "-"}
+                          </Text>
+                        </View>
+
+                        <View className={`px-3 py-1.5 rounded-full border ${statusPillClasses(item?.status || item?.bookingStatus)}`}>
+                          <Text className="text-[10px] font-bold uppercase">
+                            {String(item?.status || item?.bookingStatus || "pending")}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View className="mt-3 flex-row items-center justify-between">
+                        <Text className="text-xs text-slate-500">
+                          Seats: {toList(item?.seats).length || toNumber(item?.numberOfAdults) + toNumber(item?.numberOfChildren)}
+                        </Text>
+                        <Text className="text-base font-black text-slate-900">
+                          {formatCurrencyINR(item?.totalAmount || item?.price)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <View className="py-10 items-center justify-center bg-white rounded-xl border border-slate-200">
+                    <Text className="text-sm font-bold text-slate-700">No tour bookings found</Text>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        ) : !isHotel ? (
           <View className="bg-white rounded-xl border border-slate-200 p-4 mb-3">
             <Text className="text-xs text-slate-500 font-medium text-center">
               {bookingType} bookings are not available yet.
@@ -642,9 +811,10 @@ const Profile = ({ navigation }) => {
             </View>
 
             {bookingLoading && (
-              <View className="flex-row items-center justify-center bg-white rounded-xl border border-slate-200 py-8">
-                <ActivityIndicator size="small" color="#1d4ed8" />
-                <Text className="text-sm text-slate-600 ml-2 font-medium">Loading bookings...</Text>
+              <View>
+                {[0, 1, 2].map((idx) => (
+                  <HotelBookingCardSkeleton key={`hotel-skeleton-${idx}`} />
+                ))}
               </View>
             )}
 
@@ -716,12 +886,13 @@ const Profile = ({ navigation }) => {
     );
   };
 
-  const renderCoupons = () => (
+const renderCoupons = () => (
     <View>
       {couponsState?.status === "loading" && (
-        <View className="flex-row items-center mb-3">
-          <ActivityIndicator size="small" color="#2563eb" />
-          <Text className="text-sm text-slate-600 ml-2 font-medium">Loading coupons...</Text>
+        <View>
+          {[0, 1, 2].map((idx) => (
+            <CouponCardSkeleton key={`coupon-skeleton-${idx}`} />
+          ))}
         </View>
       )}
 
@@ -780,9 +951,10 @@ const Profile = ({ navigation }) => {
   const renderComplaints = () => {
     if (complaintsState?.status === "loading") {
       return (
-        <View className="flex-row items-center mb-3">
-          <ActivityIndicator size="small" color="#2563eb" />
-          <Text className="text-sm text-slate-600 ml-2 font-medium">Loading complaints...</Text>
+        <View>
+          {[0, 1, 2].map((idx) => (
+            <ComplaintCardSkeleton key={`complaint-skeleton-${idx}`} />
+          ))}
         </View>
       );
     }

@@ -91,7 +91,7 @@ const SkeletonHotelCard = () => (
 const Hotels = ({ navigation, route }) => {
   const dispatch = useDispatch();
   const safeParams = route?.params || {};
-  const { searchQuery, checkInDate, checkOutDate, guests, countRooms } = safeParams;
+  const { searchQuery, checkInDate, checkOutDate, guests, countRooms, showAll } = safeParams;
   
   const { data: hotels, loading, error } = useSelector((state) => state.hotel);
   const { beds, rooms: roomTypes } = useSelector((state) => state.additional);
@@ -151,6 +151,30 @@ const Hotels = ({ navigation, route }) => {
        }
      if (countRooms) setLocalRooms(Number(countRooms));
   }, [searchQuery, checkInDate, checkOutDate, guests, countRooms]);
+
+  // Initial load:
+  // - If a search query is passed, run that specific search.
+  // - If "View all" is requested (or no query is provided), fetch broad hotel list.
+  useEffect(() => {
+    const hasQuery = !!String(searchQuery || "").trim();
+
+    if (hasQuery) {
+      dispatch(
+        searchHotel({
+          city: searchQuery,
+          checkInDate,
+          checkOutDate,
+          guests,
+          countRooms,
+        })
+      );
+      return;
+    }
+
+    if (showAll || !hasQuery) {
+      dispatch(searchHotel({ page: 1, limit: 50 }));
+    }
+  }, [dispatch, searchQuery, checkInDate, checkOutDate, guests, countRooms, showAll]);
 
   const toggleAmenity = (amenity) => {
     if (selectedAmenities.includes(amenity)) {
@@ -402,7 +426,15 @@ const Hotels = ({ navigation, route }) => {
         </Text>
         <Text className="text-slate-600 mt-2 text-center">{error}</Text>
         <TouchableOpacity
-          onPress={() => dispatch(searchHotel({ city: searchQuery }))}
+          onPress={() =>
+            dispatch(
+              searchHotel(
+                String(searchQuery || "").trim()
+                  ? { city: searchQuery }
+                  : { page: 1, limit: 50 }
+              )
+            )
+          }
           className="bg-blue-600 px-6 py-3 rounded-xl mt-6"
         >
           <Text className="text-white font-bold">Try Again</Text>
@@ -421,7 +453,7 @@ const Hotels = ({ navigation, route }) => {
               </TouchableOpacity>
               <TouchableOpacity className="flex-1" onPress={() => setShowSearchModal(true)}>
                   <Text className="text-[17px] font-bold text-slate-900 leading-tight" numberOfLines={1}>
-                    {localCity || "Where to?"}
+                    {localCity || (showAll ? "All Hotels" : "Where to?")}
                   </Text>
                   <Text className="text-[11px] text-slate-500 font-medium mt-0.5">
                     {display(localCheckIn)} - {display(localCheckOut)} • {localGuests} Guest{localGuests > 1 ? 's' : ''}

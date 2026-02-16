@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  ActivityIndicator,
   TouchableOpacity,
   TextInput,
   Image,
@@ -11,17 +10,15 @@ import {
   Animated,
   Easing,
   Dimensions,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../contexts/ThemeContext";
 import {
   fetchTourList,
   filterToursByQuery,
-  fetchTourById,
-  resetSelectedTour,
 } from "../store/slices/tourSlice";
 import { useNavigation } from "@react-navigation/native";
 
@@ -38,6 +35,12 @@ const splitCsvText = (value) =>
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+
+// API token matching for visitngPlaces/visitingPlaces supports optional "1N " style prefixes.
+const normalizePlaceToken = (value) =>
+  String(value || "")
+    .replace(/^\s*\d+\s*N\s*/i, "")
+    .trim();
 
 const getTourPlaces = (tour) => {
   const raw = tour?.visitngPlaces || tour?.visitingPlaces || "";
@@ -61,30 +64,16 @@ const formatINR = (value) => {
   }
 };
 
-function Chip({ label, active, onPress }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.85}
-      className={`rounded-full px-3 py-2 mr-2 border ${
-        active ? "bg-blue-50 border-blue-400" : "bg-white border-slate-200"
-      }`}
-    >
-      <Text className={`text-[12px] font-semibold ${active ? "text-blue-700" : "text-slate-700"}`} numberOfLines={1}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
 function PrimaryButton({ title, onPress }) {
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.9}
-      className="h-10 rounded-xl items-center justify-center px-4 bg-[#0d3b8f]"
+      className="h-10 rounded-xl px-3.5 bg-[#0b3b94] flex-row items-center justify-center"
+      style={{ gap: 5 }}
     >
-      <Text className="text-white font-extrabold text-[13px]">{title}</Text>
+      <Text className="text-white font-extrabold text-[12px]">{title}</Text>
+      <Ionicons name="arrow-forward" size={12} color="#ffffff" />
     </TouchableOpacity>
   );
 }
@@ -175,49 +164,73 @@ function TourCard({ tour, onPressDetails }) {
     : splitCsvText(tour?.amenities);
 
   return (
-    <View className="mx-4 mb-4 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-      <View className="relative h-[150px] bg-slate-200">
+    <View
+      className="mx-4 mb-4 bg-white rounded-[22px] border border-slate-200 overflow-hidden"
+      style={{
+        shadowColor: "#0f172a",
+        shadowOffset: { width: 0, height: 7 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
+      }}
+    >
+      <View className="relative h-[158px] bg-slate-200">
         {tour?.images?.[0] ? (
           <Image source={{ uri: tour.images[0] }} className="w-full h-full" resizeMode="cover" />
         ) : (
           <View className="w-full h-full bg-slate-300" />
         )}
 
-        <View className="absolute top-3 left-3 bg-white/95 rounded-full px-2 py-1 flex-row items-center" style={{ gap: 6 }}>
-          <Ionicons name="star" size={12} color="#f59e0b" />
-          <Text className="text-[12px] font-black text-slate-800">{rating.toFixed(1)}</Text>
+        <View
+          className="absolute top-2.5 left-2.5 rounded-full px-2 py-1 flex-row items-center border border-white/70 bg-white/92"
+          style={{ gap: 4 }}
+        >
+          <Ionicons name="star" size={10} color="#f59e0b" />
+          <Text className="text-[11px] font-black text-slate-800">{rating.toFixed(1)}</Text>
         </View>
 
-        <View className="absolute top-3 right-3 bg-white/95 rounded-full px-2 py-1 flex-row items-center" style={{ gap: 6 }}>
-          <Ionicons name="moon" size={12} color="#0f429e" />
-          <Text className="text-[12px] font-black text-slate-800">{`${nights || 0}N / ${days || 0}D`}</Text>
+        <View
+          className="absolute top-2.5 right-2.5 rounded-full px-2 py-1 flex-row items-center border border-white/70 bg-white/92"
+          style={{ gap: 4 }}
+        >
+          <Ionicons name="moon" size={10} color="#0f429e" />
+          <Text className="text-[11px] font-black text-slate-800">{`${nights || 0}N / ${days || 0}D`}</Text>
         </View>
 
-        <View className="absolute left-0 right-0 bottom-0 px-3 pb-2 pt-8" style={{ backgroundColor: "rgba(15,23,42,0.55)" }}>
-          <Text className="text-white text-[18px] leading-6 font-black" numberOfLines={2}>
+        <LinearGradient
+          colors={["rgba(15,23,42,0)", "rgba(15,23,42,0.2)", "rgba(15,23,42,0.74)"]}
+          locations={[0, 0.42, 1]}
+          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
+        />
+
+        <View className="absolute left-0 right-0 bottom-0 px-3.5 pb-3.5 pt-8">
+          <Text className="text-white text-[18px] leading-5 font-black" numberOfLines={2}>
             {places}
           </Text>
-          <View className="flex-row items-center mt-1">
-            <Ionicons name="location-sharp" size={12} color="#ffffff" />
-            <Text className="text-white/95 text-[12px] ml-1" numberOfLines={1}>
+          <View className="flex-row items-center mt-1" style={{ gap: 4 }}>
+            <Ionicons name="location-sharp" size={11} color="#f8fafc" />
+            <Text className="text-white/95 text-[12px] font-semibold" numberOfLines={1}>
               {city}
             </Text>
           </View>
         </View>
       </View>
 
-      <View className="p-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200" style={{ gap: 6, maxWidth: "70%" }}>
-            <Ionicons name="business" size={12} color="#334155" />
-            <Text className="text-[12px] font-bold text-slate-700" numberOfLines={1}>
+      <View className="px-3.5 pt-3.5 pb-3.5">
+        <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
+          <View
+            className="flex-row items-center px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200"
+            style={{ gap: 5, maxWidth: "70%" }}
+          >
+            <Ionicons name="business" size={11} color="#334155" />
+            <Text className="text-[11px] font-extrabold text-slate-700" numberOfLines={1}>
               {agency}
             </Text>
           </View>
 
           {!!theme && (
-            <View className="px-2.5 py-1.5 rounded-xl bg-blue-50 border border-blue-100">
-              <Text className="text-[11px] font-bold text-blue-700" numberOfLines={1}>
+            <View className="px-2.5 py-1.5 rounded-full bg-blue-50 border border-blue-100">
+              <Text className="text-[10px] font-extrabold text-blue-700" numberOfLines={1}>
                 {theme}
               </Text>
             </View>
@@ -225,21 +238,21 @@ function TourCard({ tour, onPressDetails }) {
         </View>
 
         {!!amenities.length && (
-          <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
+          <View className="flex-row flex-wrap mt-2.5" style={{ gap: 6 }}>
             {amenities.slice(0, 2).map((am, idx) => (
-              <View key={`${am}-${idx}`} className="px-2 py-1 rounded-lg border border-slate-200 bg-white">
+              <View key={`${am}-${idx}`} className="px-2 py-1 rounded-full border border-slate-200 bg-white">
                 <Text className="text-[10px] text-slate-500">{am}</Text>
               </View>
             ))}
           </View>
         )}
 
-        <View className="h-px bg-slate-100 my-3" />
+        <View className="h-px bg-slate-100 my-3.5" />
 
-        <View className="flex-row items-end justify-between">
-          <View style={{ flex: 1, paddingRight: 10 }}>
-            <Text className="text-[10px] font-black tracking-wider text-slate-400">STARTING FROM</Text>
-            <Text className="text-[22px] leading-7 font-black text-[#113d90]" numberOfLines={1}>
+        <View className="flex-row items-end justify-between" style={{ gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Text className="text-[9px] font-black tracking-wider text-slate-400">STARTING FROM</Text>
+            <Text className="text-[20px] leading-6 font-black text-[#113d90]" numberOfLines={1}>
               {formatINR(price)}
               <Text className="text-[11px] font-semibold text-slate-500"> / person</Text>
             </Text>
@@ -256,11 +269,8 @@ export default function Tour() {
   const dispatch = useDispatch();
   const { isDark } = useTheme();
   const tourState = useSelector((state) => state.tour);
-  const selectedTour = tourState?.selectedTour;
-  const selectedTourStatus = tourState?.selectedTourStatus;
 
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [showTourDetailModal, setShowTourDetailModal] = useState(false);
   const [searchText, setSearchText] = useState("");
 
   const [fromCity, setFromCity] = useState("");
@@ -272,7 +282,6 @@ export default function Tour() {
   const [selectedThemes, setSelectedThemes] = useState([]);
   const [sortOrderFilter, setSortOrderFilter] = useState("default");
   const [durationSortFilter, setDurationSortFilter] = useState("default");
-  const [showTopFilterBar, setShowTopFilterBar] = useState(true);
 
   const tours = Array.isArray(tourState?.items) ? tourState.items : [];
   const isLoading = tourState?.status === "loading";
@@ -309,24 +318,17 @@ export default function Tour() {
   }, [dispatch]);
 
   const buildFilterQueryPayload = ({ includeAdvanced = true } = {}) => {
-    const from = String(fromCity || "").trim();
-    const to = String(toCity || "").trim();
+    const from = normalizePlaceToken(fromCity);
+    const to = normalizePlaceToken(toCity);
     const queryText = String(searchText || "").trim();
 
-    const payload = {
-      page: 1,
-      limit: 50,
-    };
+    const payload = {};
 
-    if (from && to) {
-      payload.q = `${from} ${to} ${queryText}`.trim();
-      payload.city = to;
-    } else if (from) {
-      payload.q = `${from} ${queryText}`.trim();
-    } else if (to) {
-      payload.q = `${to} ${queryText}`.trim();
-      payload.city = to;
-    } else if (queryText) {
+    if (from) payload.fromWhere = from;
+    if (to) payload.to = to;
+
+    // Keep free-text query only when from/to route filters are not being used.
+    if (!from && !to && queryText) {
       payload.q = queryText;
     }
 
@@ -350,8 +352,8 @@ export default function Tour() {
   };
 
   useEffect(() => {
-    const from = String(fromCity || "").trim();
-    const to = String(toCity || "").trim();
+    const from = normalizePlaceToken(fromCity);
+    const to = normalizePlaceToken(toCity);
     const q = String(searchText || "").trim();
 
     if (!from && !to && !q) {
@@ -360,7 +362,6 @@ export default function Tour() {
 
     const timer = setTimeout(() => {
       const payload = buildFilterQueryPayload({ includeAdvanced: false });
-      console.log("[Tour Filters] realtime /filter-tour/by-query payload", payload);
       dispatch(filterToursByQuery(payload));
     }, 350);
 
@@ -368,23 +369,9 @@ export default function Tour() {
   }, [dispatch, fromCity, toCity, searchText]);
 
   const handleApplyFilters = async () => {
-    console.log("[Tour Filters] current-state", {
-      from: String(fromCity || "").trim(),
-      to: String(toCity || "").trim(),
-      tourPriceRange,
-      tourMinRating,
-      selectedThemes,
-      tourSelectedAmenities,
-      sortOrderFilter,
-      durationSortFilter,
-    });
-
     const payload = buildFilterQueryPayload({ includeAdvanced: true });
-    console.log("[Tour Filters] API /filter-tour/by-query payload", payload);
     await dispatch(filterToursByQuery(payload));
-
     setShowFilterModal(false);
-    setShowTopFilterBar(false);
   };
 
   const handleClearAllFilters = async () => {
@@ -397,21 +384,12 @@ export default function Tour() {
     setFromCity("");
     setToCity("");
     setSearchText("");
-    setShowTopFilterBar(true);
-
-    console.log("[Tour Filters] clear-all -> refetch payload", {});
     await dispatch(fetchTourList());
   };
 
-  const handleViewDetails = async (tourId) => {
+  const handleViewDetails = (tourId) => {
     if (!tourId) return;
-    setShowTourDetailModal(true);
-    await dispatch(fetchTourById(tourId));
-  };
-
-  const closeTourDetailModal = () => {
-    setShowTourDetailModal(false);
-    dispatch(resetSelectedTour());
+    navigation.navigate("TourDetails", { tourId });
   };
 
   const headerBg = isDark ? "bg-slate-950" : "bg-slate-100";
@@ -419,8 +397,12 @@ export default function Tour() {
 
   return (
     <SafeAreaView className={`flex-1 ${headerBg}`}>
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        <View className="px-4 pt-2 pb-3">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 24 }}
+        stickyHeaderIndices={[0]}
+      >
+        <View className={`px-4 pt-2 pb-3 ${headerBg} z-20`}>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center" style={{ gap: 10 }}>
               <TouchableOpacity
@@ -491,14 +473,6 @@ export default function Tour() {
               </TouchableOpacity>
             )}
           </View>
-
-          {showTopFilterBar && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
-              {tourThemesList.slice(0, 10).map((theme) => (
-                <Chip key={theme} label={theme} active={selectedThemes.includes(theme)} onPress={() => toggleTheme(theme)} />
-              ))}
-            </ScrollView>
-          )}
 
           {!!(selectedThemes.length || tourSelectedAmenities.length || tourMinRating || tourPriceRange[0] !== 0 || fromCity || toCity || searchText) && (
             <View className="mt-3 flex-row flex-wrap items-center" style={{ gap: 8 }}>
@@ -718,53 +692,9 @@ export default function Tour() {
             </View>
           </View>
         </View>
-      </Modal>
-
-      <Modal
-        visible={showTourDetailModal}
-        transparent
-        animationType="slide"
-        onRequestClose={closeTourDetailModal}
-      >
-        <View className="flex-1 bg-black/45 justify-end">
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-8">
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-[19px] font-black text-slate-900">Tour Details</Text>
-              <TouchableOpacity onPress={closeTourDetailModal} className="p-2 rounded-full bg-slate-100">
-                <Ionicons name="close" size={18} color="#475569" />
-              </TouchableOpacity>
-            </View>
-
-            {selectedTourStatus === "loading" && (
-              <View className="py-6 items-center justify-center">
-                <ActivityIndicator size="small" color="#1d4ed8" />
-                <Text className="text-slate-500 mt-2">Loading details...</Text>
-              </View>
-            )}
-
-            {selectedTourStatus !== "loading" && !!selectedTour && (
-              <View>
-                <Text className="text-[18px] font-black text-slate-900">{selectedTour?.travelAgencyName || "Tour"}</Text>
-                <Text className="text-[13px] text-slate-600 mt-1">
-                  {getTourPlaces(selectedTour) || selectedTour?.city || "-"}
-                </Text>
-                <Text className="text-[13px] text-slate-500 mt-1">
-                  {`${toNumber(selectedTour?.nights)}N / ${toNumber(selectedTour?.days)}D`} • {formatINR(selectedTour?.price)} / person
-                </Text>
-                {!!selectedTour?.overview && (
-                  <Text className="text-[13px] text-slate-600 mt-3" numberOfLines={6}>
-                    {selectedTour.overview}
-                  </Text>
-                )}
-              </View>
-            )}
-
-            {selectedTourStatus === "failed" && (
-              <Text className="text-red-600 text-[13px] font-semibold">Unable to load tour details.</Text>
-            )}
-          </View>
-        </View>
-      </Modal>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+

@@ -19,6 +19,7 @@ import RegisterPage from './screens/Register';
 import Home from './screens/Home';
 import Cabs from './screens/Cabs';
 import Tour from './screens/Tour';
+import TourDetails from './screens/TourDetails';
 import Hotels from './screens/Hotels';
 import HotelDetails from './screens/HotelDetails';
 import Profile from './screens/Profile';
@@ -165,7 +166,10 @@ function RootNavigator() {
       ) : isSignedIn === null ? (
         <Stack.Screen name="Loading" component={LoadingScreen} />
       ) : isSignedIn ? (
-        <Stack.Screen name="MainTabs" component={TabNavigator} />
+        <>
+          <Stack.Screen name="MainTabs" component={TabNavigator} />
+          <Stack.Screen name="TourDetails" component={TourDetails} />
+        </>
       ) : (
         <>
           <Stack.Screen name="Login" component={LoginPage} />
