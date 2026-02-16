@@ -13,6 +13,7 @@ import { NavigationContext } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { frontHotels } from "../store/slices/hotelSlice";
 import { Ionicons } from "@expo/vector-icons";
+import HomeScreenFrontHotelsSkeleton from "../components/skeleton/HomeScreenFrontHotelsSkeleton";
 
 // ---------- helpers ----------
 const safeText = (v, fallback = "") =>
@@ -138,17 +139,6 @@ const HotelCard = ({ hotel, onPress }) => {
   );
 };
 
-const SkeletonCard = () => (
-  <View className="w-[270px] mr-4 bg-white rounded-[22px] overflow-hidden border border-slate-100">
-    <View className="w-full h-40 bg-slate-200" />
-    <View className="p-3">
-      <View className="h-4 bg-slate-200 rounded w-2/3 mb-2" />
-      <View className="h-3 bg-slate-200 rounded w-1/2 mb-3" />
-      <View className="h-4 bg-slate-200 rounded w-1/3" />
-    </View>
-  </View>
-);
-
 export default function HomeScreenFrontHotels() {
   const navigation = useContext(NavigationContext);
   const dispatch = useDispatch();
@@ -212,9 +202,9 @@ export default function HomeScreenFrontHotels() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10 }}
           >
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
+            <HomeScreenFrontHotelsSkeleton />
+            <HomeScreenFrontHotelsSkeleton />
+            <HomeScreenFrontHotelsSkeleton />
           </ScrollView>
           <View className="items-center mt-2">
             <ActivityIndicator size="small" color="#0d3b8f" />

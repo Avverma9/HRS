@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,9 +7,6 @@ import {
   TextInput,
   Image,
   Modal,
-  Animated,
-  Easing,
-  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
@@ -21,8 +18,7 @@ import {
   filterToursByQuery,
 } from "../store/slices/tourSlice";
 import { useNavigation } from "@react-navigation/native";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+import { TourCardSkeleton } from "../components/skeleton/TourSkeleton";
 
 const toNumber = (value) => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -78,75 +74,6 @@ function PrimaryButton({ title, onPress }) {
   );
 }
 
-function SkeletonShimmer({ height = 12, width = "100%", radius = 14, style }) {
-  const shimmer = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(shimmer, {
-        toValue: 1,
-        duration: 1100,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      })
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [shimmer]);
-
-  const translateX = shimmer.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-SCREEN_WIDTH, SCREEN_WIDTH],
-  });
-
-  return (
-    <View
-      style={[
-        {
-          height,
-          width,
-          borderRadius: radius,
-          backgroundColor: "rgba(148, 163, 184, 0.22)",
-          overflow: "hidden",
-        },
-        style,
-      ]}
-    >
-      <Animated.View
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: "40%",
-          transform: [{ translateX }],
-          backgroundColor: "rgba(255,255,255,0.55)",
-        }}
-      />
-    </View>
-  );
-}
-
-function TourCardSkeleton() {
-  return (
-    <View className="mx-4 mb-4 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <SkeletonShimmer height={150} width="100%" radius={0} />
-      <View className="p-3">
-        <View className="flex-row items-center justify-between">
-          <SkeletonShimmer height={18} width={86} radius={10} />
-          <SkeletonShimmer height={18} width={70} radius={10} />
-        </View>
-        <SkeletonShimmer height={14} width={230} radius={10} style={{ marginTop: 10 }} />
-        <SkeletonShimmer height={10} width={120} radius={8} style={{ marginTop: 10 }} />
-        <View className="h-px bg-slate-100 my-3" />
-        <View className="flex-row items-end justify-between">
-          <SkeletonShimmer height={28} width={130} radius={12} />
-          <SkeletonShimmer height={40} width={110} radius={14} />
-        </View>
-      </View>
-    </View>
-  );
-}
 
 function TourCard({ tour, onPressDetails }) {
   const rating = toNumber(tour?.starRating) || 0;

@@ -13,6 +13,7 @@ import { NavigationContext } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { fetchTourList } from "../store/slices/tourSlice";
+import HomeScreenFrontTourSkeleton from "../components/skeleton/HomeScreenFrontTourSkeleton";
 
 const safeText = (v, fallback = "") =>
   typeof v === "string" ? v.trim() || fallback : fallback;
@@ -140,17 +141,6 @@ const TourCard = ({ tour, onPress }) => {
   );
 };
 
-const SkeletonCard = () => (
-  <View className="w-[260px] mr-4 bg-white rounded-[18px] overflow-hidden border border-slate-100">
-    <View className="w-full h-40 bg-slate-200" />
-    <View className="p-3">
-      <View className="h-4 bg-slate-200 rounded w-2/3 mb-2" />
-      <View className="h-3 bg-slate-200 rounded w-1/2 mb-3" />
-      <View className="h-4 bg-slate-200 rounded w-1/3" />
-    </View>
-  </View>
-);
-
 export default function HomeScreenFrontTour() {
   const navigation = useContext(NavigationContext);
   const dispatch = useDispatch();
@@ -214,9 +204,9 @@ export default function HomeScreenFrontTour() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10 }}
           >
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
+            <HomeScreenFrontTourSkeleton />
+            <HomeScreenFrontTourSkeleton />
+            <HomeScreenFrontTourSkeleton />
           </ScrollView>
           <View className="items-center mt-2">
             <ActivityIndicator size="small" color="#0d3b8f" />

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -11,8 +11,6 @@ import {
   StatusBar,
   Modal,
   TextInput,
-  Animated,
-  Easing
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { searchHotel } from "../store/slices/hotelSlice";
@@ -20,73 +18,11 @@ import { getBeds, getRooms } from "../store/slices/additionalSlice";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import SearchCard from "../components/SearchCard";
+import SkeletonShimmer from "../components/skeleton/SkeletonShimmer";
+import { HotelCardSkeleton } from "../components/skeleton/HotelSkeleton";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 32;
-
-const SkeletonShimmer = ({ height = 12, width = "100%", radius = 8, style }) => {
-  const shimmer = useRef(new Animated.Value(0)).current;
-  const screenWidth = Dimensions.get("window").width;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(shimmer, {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [shimmer]);
-
-  const translateX = shimmer.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-screenWidth, screenWidth],
-  });
-
-  return (
-    <View
-      style={[
-        {
-          height,
-          width,
-          borderRadius: radius,
-          backgroundColor: "rgba(226,232,240,0.6)",
-          overflow: "hidden",
-        },
-        style,
-      ]}
-    >
-      <Animated.View
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          width: "40%",
-          transform: [{ translateX }],
-          backgroundColor: "rgba(255,255,255,0.25)",
-        }}
-      />
-    </View>
-  );
-};
-
-const SkeletonHotelCard = () => (
-  <View className="bg-white rounded-[16px] mb-4 overflow-hidden border border-slate-200 shadow-sm mx-4">
-    <SkeletonShimmer height={200} width="100%" radius={0} />
-    <View className="p-3">
-      <SkeletonShimmer height={16} width="60%" radius={8} />
-      <SkeletonShimmer height={12} width="40%" radius={8} style={{ marginTop: 8 }} />
-      <SkeletonShimmer height={10} width="30%" radius={8} style={{ marginTop: 10 }} />
-      <View className="flex-row items-center justify-between mt-4">
-        <SkeletonShimmer height={20} width="40%" radius={8} />
-        <SkeletonShimmer height={32} width={70} radius={12} />
-      </View>
-    </View>
-  </View>
-);
 
 const Hotels = ({ navigation, route }) => {
   const dispatch = useDispatch();
@@ -409,9 +345,9 @@ const Hotels = ({ navigation, route }) => {
           contentContainerStyle={{ paddingTop: 12, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          <SkeletonHotelCard />
-          <SkeletonHotelCard />
-          <SkeletonHotelCard />
+          <HotelCardSkeleton />
+          <HotelCardSkeleton />
+          <HotelCardSkeleton />
         </ScrollView>
       </View>
     );

@@ -12,8 +12,6 @@ import {
   TextInput,
   Alert,
   KeyboardAvoidingView,
-  Animated,
-  Easing,
   Dimensions,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
@@ -31,6 +29,7 @@ import {
 } from "../store/slices/bookingSlice";
 import { getUserId } from "../utils/credentials";
 import { getAmenityDisplayName, getAmenityIconName } from "../utils/amenities";
+import HotelDetailsSkeleton from "../components/skeleton/HotelDetailsSkeleton";
 
 /**
  * ✅ What this version fixes/does:
@@ -185,61 +184,6 @@ const SectionTitle = ({ title, right }) => (
     {!!right && right}
   </View>
 );
-
-const SkeletonBlock = ({ className = "" }) => (
-  <View className={`bg-slate-200/80 overflow-hidden ${className}`}>
-    <View className="absolute inset-0 bg-slate-200/80" />
-  </View>
-);
-
-const SkeletonShimmer = ({ height = 12, width = "100%", radius = 8, style }) => {
-  const shimmer = useRef(new Animated.Value(0)).current;
-  const screenWidth = Dimensions.get("window").width;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(shimmer, {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [shimmer]);
-
-  const translateX = shimmer.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-screenWidth, screenWidth],
-  });
-
-  return (
-    <View
-      style={[
-        {
-          height,
-          width,
-          borderRadius: radius,
-          backgroundColor: "rgba(226,232,240,0.6)",
-          overflow: "hidden",
-        },
-        style,
-      ]}
-    >
-      <Animated.View
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          width: "40%",
-          transform: [{ translateX }],
-          backgroundColor: "rgba(255,255,255,0.25)",
-        }}
-      />
-    </View>
-  );
-};
 
 const HotelDetails = ({ navigation, route }) => {
   const dispatch = useDispatch();
@@ -894,62 +838,7 @@ const HotelDetails = ({ navigation, route }) => {
   const previewPolicies = useMemo(() => policyItems.slice(0, 5), [policyItems]);
 
   if (loading) {
-    return (
-      <View className="flex-1 bg-slate-50">
-        {/* Hero skeleton */}
-        <SkeletonShimmer height={288} width="100%" radius={0} />
-
-        {/* Content skeleton */}
-        <View className="-mt-8 bg-slate-50 rounded-t-[36px] px-5 pt-6 pb-8">
-          <SkeletonShimmer height={24} width="70%" radius={8} />
-          <SkeletonShimmer height={14} width="90%" radius={8} style={{ marginTop: 12 }} />
-          <SkeletonShimmer height={14} width="70%" radius={8} style={{ marginTop: 8 }} />
-
-          <View className="flex-row flex-wrap gap-2 mt-5">
-            <SkeletonShimmer height={32} width={112} radius={16} />
-            <SkeletonShimmer height={32} width={96} radius={16} />
-            <SkeletonShimmer height={32} width={112} radius={16} />
-          </View>
-
-          <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm mt-5">
-            <SkeletonShimmer height={14} width={96} radius={8} />
-            <SkeletonShimmer height={12} width="100%" radius={8} style={{ marginTop: 12 }} />
-            <SkeletonShimmer height={12} width="92%" radius={8} style={{ marginTop: 8 }} />
-            <SkeletonShimmer height={12} width="80%" radius={8} style={{ marginTop: 8 }} />
-          </View>
-
-          <View className="mt-6">
-            <SkeletonShimmer height={18} width={128} radius={8} style={{ marginBottom: 12 }} />
-            <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm mb-4">
-              <SkeletonShimmer height={12} width={64} radius={8} />
-              <View className="flex-row gap-3 mt-3">
-                <SkeletonShimmer height={64} width="100%" radius={12} style={{ flex: 1 }} />
-                <SkeletonShimmer height={64} width="100%" radius={12} style={{ flex: 1 }} />
-              </View>
-              <SkeletonShimmer height={12} width={192} radius={8} style={{ marginTop: 16 }} />
-            </View>
-            <SkeletonShimmer height={80} width="100%" radius={24} style={{ marginBottom: 16 }} />
-            <SkeletonShimmer height={80} width="100%" radius={24} />
-          </View>
-
-          <View className="mt-6">
-            <SkeletonShimmer height={18} width={128} radius={8} style={{ marginBottom: 12 }} />
-            <SkeletonShimmer height={40} width="100%" radius={24} style={{ marginBottom: 12 }} />
-            <SkeletonShimmer height={40} width="86%" radius={24} />
-          </View>
-
-          <View className="mt-6">
-            <SkeletonShimmer height={18} width={128} radius={8} style={{ marginBottom: 12 }} />
-            <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm">
-              <SkeletonShimmer height={160} width="100%" radius={16} />
-              <SkeletonShimmer height={14} width="50%" radius={8} style={{ marginTop: 16 }} />
-              <SkeletonShimmer height={12} width="35%" radius={8} style={{ marginTop: 8 }} />
-              <SkeletonShimmer height={40} width="100%" radius={12} style={{ marginTop: 16 }} />
-            </View>
-          </View>
-        </View>
-      </View>
-    );
+    return <HotelDetailsSkeleton />;
   }
 
   if (error || !hotel) {
