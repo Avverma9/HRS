@@ -87,6 +87,125 @@ const humanizeKey = (key) =>
     .trim()
     .replace(/\b\w/g, (m) => m.toUpperCase());
 
+const COLUMN_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+const parseSeaterType = (value) => {
+  const match = String(value || "").match(/(\d+)\s*[*xX]\s*(\d+)/);
+  if (!match) return null;
+  return {
+    left: toNumber(match[1]),
+    right: toNumber(match[2]),
+  };
+};
+
+const normalizePatternByColumns = (left, right, fallbackColumnsCount) => {
+  if (fallbackColumnsCount <= 0) {
+    return { left, right, aisle: right > 0 };
+  }
+
+  let nextLeft = Math.max(0, left);
+  let nextRight = Math.max(0, right);
+  const total = nextLeft + nextRight;
+
+  if (total > fallbackColumnsCount) {
+    if (nextLeft >= fallbackColumnsCount) {
+      nextLeft = fallbackColumnsCount;
+      nextRight = 0;
+    } else {
+      nextRight = Math.max(0, fallbackColumnsCount - nextLeft);
+    }
+  } else if (total < fallbackColumnsCount) {
+    nextRight += fallbackColumnsCount - total;
+  }
+
+  return { left: nextLeft, right: nextRight, aisle: nextRight > 0 };
+};
+
+const resolveSeatPattern = (vehicle, fallbackColumnsCount = 0) => {
+  const config = vehicle?.seatConfig || {};
+  const cfgLeft = toNumber(config?.left);
+  const cfgRight = toNumber(config?.right);
+  const cfgAisle = config?.aisle !== false;
+
+  if (cfgLeft > 0 || cfgRight > 0) {
+    const left = cfgLeft > 0 ? cfgLeft : Math.max(1, fallbackColumnsCount - cfgRight);
+    const right = cfgRight > 0 ? cfgRight : Math.max(0, fallbackColumnsCount - left);
+    const normalized = normalizePatternByColumns(left, right, fallbackColumnsCount);
+    return { ...normalized, aisle: cfgAisle && normalized.right > 0 };
+  }
+
+  const parsed = parseSeaterType(vehicle?.seaterType);
+  if (parsed && (parsed.left > 0 || parsed.right > 0)) {
+    const normalized = normalizePatternByColumns(
+      Math.max(parsed.left, 1),
+      Math.max(parsed.right, 0),
+      fallbackColumnsCount
+    );
+    return normalized;
+  }
+
+  if (fallbackColumnsCount <= 0) return { left: 2, right: 1, aisle: true };
+  if (fallbackColumnsCount <= 2) {
+    return { left: fallbackColumnsCount, right: 0, aisle: false };
+  }
+
+  const left = Math.ceil(fallbackColumnsCount / 2);
+  const right = Math.max(0, fallbackColumnsCount - left);
+  return { left, right, aisle: right > 0 };
+};
+
+const buildSeatDeckModel = (allSeatLabels, vehicle) => {
+  const rowsMap = {};
+  const detectedColumns = new Set();
+
+  allSeatLabels.forEach((seat) => {
+    const match = String(seat).match(/^(\d+)([A-Za-z]+)$/);
+    if (!match) return;
+    const row = match[1];
+    const col = String(match[2]).toUpperCase();
+    if (!rowsMap[row]) rowsMap[row] = {};
+    rowsMap[row][col] = seat;
+    detectedColumns.add(col);
+  });
+
+  const orderedRows = Object.keys(rowsMap).sort((a, b) => Number(a) - Number(b));
+  const cols = Array.from(detectedColumns).sort((a, b) => a.localeCompare(b));
+  const pattern = resolveSeatPattern(vehicle, cols.length);
+  const totalNeeded = Math.max(cols.length, pattern.left + (pattern.aisle ? pattern.right : 0));
+
+  const enrichedCols = [...cols];
+  for (const letter of COLUMN_LETTERS) {
+    if (enrichedCols.length >= totalNeeded) break;
+    if (!enrichedCols.includes(letter)) enrichedCols.push(letter);
+  }
+
+  const orderedColumns = enrichedCols.sort((a, b) => a.localeCompare(b));
+  let leftColumns = orderedColumns.slice(0, pattern.left);
+  let rightColumns = pattern.aisle
+    ? orderedColumns.slice(pattern.left, pattern.left + pattern.right)
+    : [];
+
+  if (!leftColumns.length && orderedColumns.length) {
+    leftColumns = orderedColumns.slice(0, Math.ceil(orderedColumns.length / 2));
+  }
+  if (pattern.aisle && !rightColumns.length && orderedColumns.length > leftColumns.length) {
+    rightColumns = orderedColumns.slice(leftColumns.length);
+  }
+
+  const rows = orderedRows.map((row) => ({
+    row,
+    leftSeats: leftColumns.map((col) => rowsMap[row]?.[col] || null),
+    rightSeats: rightColumns.map((col) => rowsMap[row]?.[col] || null),
+  }));
+
+  return {
+    rows,
+    leftColumns,
+    rightColumns,
+    hasAisle: Boolean(pattern.aisle && rightColumns.length > 0),
+  };
+};
+
 const extractVehicleSeats = (vehicle) => {
   if (!vehicle) return [];
   const direct = Array.isArray(vehicle.seats) ? vehicle.seats : null;
@@ -106,6 +225,13 @@ const extractVehicleSeats = (vehicle) => {
       .filter((x) => x.seatNumber);
   }
 
+  const seatLayout = Array.isArray(vehicle?.seatLayout) ? vehicle.seatLayout : [];
+  if (seatLayout.length) {
+    return seatLayout
+      .map((seat) => ({ seatNumber: String(seat || "").trim(), isBooked: false }))
+      .filter((x) => x.seatNumber);
+  }
+
   const totalSeats = Math.max(
     toNumber(vehicle.totalSeats),
     toNumber(vehicle.capacity),
@@ -114,7 +240,9 @@ const extractVehicleSeats = (vehicle) => {
   );
   if (!totalSeats) return [];
 
-  const columns = ["A", "B", "D"];
+  const pattern = resolveSeatPattern(vehicle, 0);
+  const totalCols = Math.max(1, pattern.left + (pattern.aisle ? pattern.right : 0));
+  const columns = COLUMN_LETTERS.slice(0, totalCols);
   const generated = [];
   let count = 0;
   let row = 1;
@@ -196,25 +324,21 @@ const SeatButton = ({ seat, selected, booked, onPress }) => {
       disabled={booked}
       onPress={onPress}
       activeOpacity={0.8}
-      className={`w-11 h-11 rounded-xl border items-center justify-center m-1.5 ${
+      className={`w-11 h-10 rounded-lg border items-center justify-center shadow-sm ${
         booked
-          ? "bg-gray-100 border-transparent"
+          ? "bg-gray-100 border-gray-200"
           : selected
-            ? "bg-blue-600 border-blue-600 shadow-md shadow-blue-200"
+            ? "bg-blue-600 border-blue-600 shadow-blue-200"
             : "bg-white border-gray-200"
       }`}
     >
-      {selected ? (
-        <Ionicons name="checkmark" size={20} color="white" />
-      ) : (
-        <Text
-          className={`text-[13px] font-bold ${
-            booked ? "text-gray-300" : "text-gray-600"
-          }`}
-        >
-          {seat}
-        </Text>
-      )}
+      <Text
+        className={`text-[13px] font-bold ${
+          booked ? "text-gray-300" : selected ? "text-white" : "text-gray-700"
+        }`}
+      >
+        {seat}
+      </Text>
     </TouchableOpacity>
   );
 };
@@ -301,25 +425,27 @@ export default function TourDetails({ navigation, route }) {
     [seatsMaster],
   );
 
-  const seatsByRows = useMemo(() => {
-    const mapped = {};
-    allSeatLabels.forEach((seat) => {
-      const match = seat.match(/^(\d+)([A-Za-z]+)$/);
-      if (!match) return;
-      const row = match[1];
-      const col = match[2];
-      if (!mapped[row]) mapped[row] = {};
-      mapped[row][col] = seat;
-    });
+  const seatDeck = useMemo(
+    () => buildSeatDeckModel(allSeatLabels, selectedVehicle),
+    [allSeatLabels, selectedVehicle],
+  );
+  const seatLayoutLabel = useMemo(() => {
+    const effective = seatDeck.hasAisle
+      ? `${seatDeck.leftColumns.length}*${seatDeck.rightColumns.length}`
+      : `${seatDeck.leftColumns.length}`;
 
-    const orderedRows = Object.keys(mapped).sort(
-      (a, b) => Number(a) - Number(b),
-    );
-    return orderedRows.map((row) => ({
-      row,
-      cols: mapped[row],
-    }));
-  }, [allSeatLabels]);
+    const configured = parseSeaterType(selectedVehicle?.seaterType);
+    if (
+      configured &&
+      configured.left === seatDeck.leftColumns.length &&
+      configured.right === seatDeck.rightColumns.length
+    ) {
+      return `${configured.left}*${configured.right}`;
+    }
+
+    return effective;
+  }, [seatDeck, selectedVehicle]);
+  const totalSeatCount = allSeatLabels.length || toNumber(selectedVehicle?.totalSeats);
 
   const places = splitValues(tour?.visitngPlaces || tour?.visitingPlaces).join(
     ", ",
@@ -338,7 +464,7 @@ export default function TourDetails({ navigation, route }) {
   const itinerary = Array.isArray(tour?.dayWise) ? tour.dayWise : [];
   const locationLabel = [tour?.city, tour?.state].filter(Boolean).join(", ");
   const isCustomizable = normalizeBool(tour?.isCustomizable);
-  const hasVehicleService = vehicles.length > 0;
+  const hasVehicleService = vehicles.length > 0 && allSeatLabels.length > 0;
   const hasLongOverview = overview.length > 240;
   const termsEntries = useMemo(() => {
     if (!tour?.termsAndConditions || typeof tour.termsAndConditions !== "object") {
@@ -407,7 +533,7 @@ export default function TourDetails({ navigation, route }) {
   };
 
   const openBooking = () => {
-    if (!selectedVehicle?._id) {
+    if (!selectedVehicle?._id || !allSeatLabels.length) {
       Alert.alert(
         "No seats available",
         "No seats available for this tour right now.",
@@ -907,61 +1033,107 @@ export default function TourDetails({ navigation, route }) {
               {/* --- STEP 1: SEATS --- */}
               {bookingStep === 1 && (
                 <View className="flex-1 bg-white">
-                  {/* Legend */}
-                  <View className="flex-row justify-center py-6 gap-8 bg-gray-50/50 border-b border-gray-50">
-                      <View className="flex-row items-center gap-2">
-                          <View className="w-5 h-5 rounded-lg bg-white border border-gray-200" />
-                          <Text className="text-xs text-gray-500 font-bold">Available</Text>
-                      </View>
-                      <View className="flex-row items-center gap-2">
-                          <View className="w-5 h-5 rounded-lg bg-blue-600 border border-blue-600 shadow-sm" />
-                          <Text className="text-xs text-gray-500 font-bold">Selected</Text>
-                      </View>
-                      <View className="flex-row items-center gap-2">
-                          <View className="w-5 h-5 rounded-lg bg-gray-100 border-transparent" />
-                          <Text className="text-xs text-gray-500 font-bold">Booked</Text>
+                  <View className="px-5 pt-4 pb-3 border-b border-gray-100">
+                      <Text className="text-xs text-gray-500 font-semibold tracking-wide">
+                        {formatValue(selectedVehicle?.name, "Bus")} • {seatLayoutLabel} Layout - {totalSeatCount} Seats
+                      </Text>
+                      <View className="mt-3 rounded-xl border border-gray-200 bg-gray-50 py-3 px-4 flex-row items-center justify-center" style={{ gap: 18 }}>
+                        <View className="flex-row items-center">
+                          <View className="w-3.5 h-3.5 rounded bg-white border border-gray-300 mr-2" />
+                          <Text className="text-xs text-gray-600 font-semibold">Avail</Text>
+                        </View>
+                        <View className="flex-row items-center">
+                          <View className="w-3.5 h-3.5 rounded bg-blue-600 border border-blue-600 mr-2" />
+                          <Text className="text-xs text-gray-600 font-semibold">Selected</Text>
+                        </View>
+                        <View className="flex-row items-center">
+                          <View className="w-3.5 h-3.5 rounded bg-gray-200 border border-gray-200 mr-2" />
+                          <Text className="text-xs text-gray-600 font-semibold">Booked</Text>
+                        </View>
                       </View>
                   </View>
 
-                  <ScrollView contentContainerStyle={{ padding: 24, alignItems: 'center', paddingBottom: 100 }}>
-                       {/* Driver Icon */}
-                      <View className="w-full max-w-[320px] mb-8 flex-row justify-end opacity-40">
-                           <View className="flex-col items-center">
-                               <Ionicons name="radio-outline" size={28} color="#6B7280" />
-                               <Text className="text-[10px] font-bold text-gray-500 mt-1 uppercase">Driver</Text>
-                           </View>
+                  <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 18, alignItems: 'center', paddingBottom: 100 }}>
+                      <View className="w-full max-w-[360px] mb-5">
+                        <View className="flex-row justify-end items-center opacity-60 pr-1">
+                          <Ionicons name="options-outline" size={18} color="#9CA3AF" />
+                          <Text className="text-[10px] font-bold text-gray-500 ml-1.5 uppercase tracking-wider">Driver</Text>
+                        </View>
+                        <View className="mt-3 border-t border-dashed border-gray-200" />
                       </View>
 
-                      <View className="w-full max-w-[320px]">
-                          {/* Column Labels */}
-                          <View className="flex-row justify-between mb-4 px-1.5">
-                              <View className="flex-row gap-3">
-                                  <Text className="w-11 text-center text-xs font-extrabold text-gray-300">A</Text>
-                                  <Text className="w-11 text-center text-xs font-extrabold text-gray-300">B</Text>
+                      <View className="w-full max-w-[360px]">
+                          <View className="mb-3 px-1.5">
+                            <View className="flex-row items-center justify-between">
+                              <View className="flex-row" style={{ gap: 12 }}>
+                                {seatDeck.leftColumns.map((col) => (
+                                  <Text key={`col-left-${col}`} className="w-11 text-center text-xs font-extrabold text-gray-300">
+                                    {col}
+                                  </Text>
+                                ))}
                               </View>
-                              <Text className="w-11 text-center text-xs font-extrabold text-gray-300">D</Text>
+                              {seatDeck.hasAisle && <View className="w-8" />}
+                              {!!seatDeck.rightColumns.length && (
+                                <View className="flex-row" style={{ gap: 12 }}>
+                                  {seatDeck.rightColumns.map((col) => (
+                                    <Text key={`col-right-${col}`} className="w-11 text-center text-xs font-extrabold text-gray-300">
+                                      {col}
+                                    </Text>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
                           </View>
 
-                          {seatsByRows.map((row) => {
-                              const a = row.cols?.A;
-                              const b = row.cols?.B;
-                              const d = row.cols?.D;
-                              return (
-                              <View key={row.row} className="flex-row justify-between mb-3">
-                                  <View className="flex-row gap-3">
-                                      <View className="w-11 h-11">
-                                          {a && <SeatButton seat={a} booked={bookedSeats.includes(a)} selected={selectedSeats.includes(a)} onPress={() => toggleSeat(a)} />}
-                                      </View>
-                                      <View className="w-11 h-11">
-                                          {b && <SeatButton seat={b} booked={bookedSeats.includes(b)} selected={selectedSeats.includes(b)} onPress={() => toggleSeat(b)} />}
-                                      </View>
+                          {seatDeck.rows.map((row) => (
+                            <View key={row.row} className="flex-row items-center justify-between mb-3">
+                              <View className="flex-row" style={{ gap: 12 }}>
+                                {row.leftSeats.map((seat, index) => (
+                                  <View key={`${row.row}-left-${index}`} className="w-11 h-11">
+                                    {seat ? (
+                                      <SeatButton
+                                        seat={seat}
+                                        booked={bookedSeats.includes(seat)}
+                                        selected={selectedSeats.includes(seat)}
+                                        onPress={() => toggleSeat(seat)}
+                                      />
+                                    ) : (
+                                      <View className="w-11 h-11" />
+                                    )}
                                   </View>
-                                  <View className="w-11 h-11">
-                                      {d && <SeatButton seat={d} booked={bookedSeats.includes(d)} selected={selectedSeats.includes(d)} onPress={() => toggleSeat(d)} />}
-                                  </View>
+                                ))}
                               </View>
-                              );
-                          })}
+
+                              {seatDeck.hasAisle && (
+                                <View className="w-8 items-center">
+                                  <Text className="text-[10px] font-bold text-gray-300">{row.row}</Text>
+                                </View>
+                              )}
+
+                              {!!row.rightSeats.length && (
+                                <View className="flex-row" style={{ gap: 12 }}>
+                                  {row.rightSeats.map((seat, index) => (
+                                    <View key={`${row.row}-right-${index}`} className="w-11 h-11">
+                                      {seat ? (
+                                        <SeatButton
+                                          seat={seat}
+                                          booked={bookedSeats.includes(seat)}
+                                          selected={selectedSeats.includes(seat)}
+                                          onPress={() => toggleSeat(seat)}
+                                        />
+                                      ) : (
+                                        <View className="w-11 h-11" />
+                                      )}
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          ))}
+
+                          <View className="mt-4 pt-3 border-t border-dashed border-gray-200 items-center">
+                            <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-[2px]">Rear Of Bus</Text>
+                          </View>
                       </View>
                   </ScrollView>
 

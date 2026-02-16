@@ -40,6 +40,8 @@ import {
   ProfileTabSkeleton,
   TourBookingCardSkeleton,
 } from "../components/skeleton/ProfileSkeleton";
+import HotelBookingsDetailModal from "../components/HotelBookingsDetailModal";
+import TourBookingDetailsModal from "../components/TourBookingDetailsModal";
 
 const TABS = ["Bookings", "Coupons", "Complaints", "Profile"];
 const BOOKING_TYPES = ["Tour", "Cabs", "Hotel"];
@@ -162,6 +164,42 @@ const calculateBookingCosts = (booking) => {
   };
 };
 
+const cleanList = (value) =>
+  toList(value)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+
+const normalizeTourSeatLabels = (booking) => {
+  const fromSeats = toList(booking?.seats)
+    .map((seat) => {
+      if (typeof seat === "string" || typeof seat === "number") return String(seat).trim();
+      if (seat && typeof seat === "object") {
+        return String(
+          seat?.seatNumber ||
+            seat?.seat ||
+            seat?.number ||
+            seat?.label ||
+            seat?.code ||
+            ""
+        ).trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+
+  const fromPassengers = toList(booking?.passengers)
+    .map((p) => String(p?.seatNumber || p?.seat || p?.seatNo || "").trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([...fromSeats, ...fromPassengers]));
+};
+
+const getTourSeatCount = (booking) => {
+  const seats = normalizeTourSeatLabels(booking);
+  if (seats.length) return seats.length;
+  return toNumber(booking?.numberOfAdults) + toNumber(booking?.numberOfChildren);
+};
+
 const BookingCard = ({ item, onViewBooking }) => {
   const hotelName = item?.hotelDetails?.hotelName || "Hotel";
   const destination = item?.destination || item?.hotelDetails?.destination || "-";
@@ -257,6 +295,7 @@ const Profile = ({ navigation }) => {
   const [bookingType, setBookingType] = useState("Hotel");
   const [bookingStatusFilter, setBookingStatusFilter] = useState("All");
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [selectedBookingType, setSelectedBookingType] = useState("Hotel");
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
@@ -468,15 +507,17 @@ const Profile = ({ navigation }) => {
     }
   };
 
-  const handleOpenBookingModal = (booking) => {
+  const handleOpenBookingModal = (booking, type = bookingType) => {
     if (!booking) return;
     setSelectedBooking(booking);
+    setSelectedBookingType(type);
     setShowBookingModal(true);
   };
 
   const handleCloseBookingModal = () => {
     setShowBookingModal(false);
     setSelectedBooking(null);
+    setSelectedBookingType("Hotel");
   };
 
   const handleOpenComplaintChat = (complaint) => {
@@ -586,12 +627,47 @@ const Profile = ({ navigation }) => {
                       </View>
 
                       <View className="mt-3 flex-row items-center justify-between">
-                        <Text className="text-xs text-slate-500">
-                          Seats: {toList(item?.seats).length || toNumber(item?.numberOfAdults) + toNumber(item?.numberOfChildren)}
-                        </Text>
+                        <View>
+                          <Text className="text-xs text-slate-500">
+                            Booking: {item?.bookingCode || item?._id || "-"}
+                          </Text>
+                          <Text className="text-xs text-slate-500 mt-1">
+                            Seats: {getTourSeatCount(item)} | Adults: {toNumber(item?.numberOfAdults)} | Children: {toNumber(item?.numberOfChildren)}
+                          </Text>
+                          {!!normalizeTourSeatLabels(item).length && (
+                            <Text className="text-xs text-slate-500 mt-1" numberOfLines={1}>
+                              Seat No: {normalizeTourSeatLabels(item).join(", ")}
+                            </Text>
+                          )}
+                        </View>
                         <Text className="text-base font-black text-slate-900">
                           {formatCurrencyINR(item?.totalAmount || item?.price)}
                         </Text>
+                      </View>
+
+                      <View className="mt-2 flex-row items-center justify-between">
+                        <Text className="text-[11px] text-slate-400">
+                          {formatLongDate(item?.from || item?.tourStartDate)} - {formatLongDate(item?.to)}
+                        </Text>
+                        <Text className="text-[11px] text-slate-400">
+                          {toNumber(item?.nights)}N / {toNumber(item?.days)}D
+                        </Text>
+                      </View>
+
+                      <View className="mt-3 border-t border-slate-100 pt-3 flex-row items-center justify-between">
+                        <View>
+                          <Text className="text-[11px] text-slate-400">Seat Price</Text>
+                          <Text className="text-sm font-bold text-slate-800">
+                            {formatCurrencyINR(item?.seatPrice || item?.basePrice || item?.price)}
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          className="px-4 h-10 rounded-xl bg-slate-900 items-center justify-center"
+                          onPress={() => handleOpenBookingModal(item, "Tour")}
+                        >
+                          <Text className="text-xs font-bold text-white">View Booking</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   ))
@@ -653,7 +729,7 @@ const Profile = ({ navigation }) => {
                     <BookingCard
                       key={item?._id || item?.bookingId || String(index)}
                       item={item}
-                      onViewBooking={handleOpenBookingModal}
+                      onViewBooking={(booking) => handleOpenBookingModal(booking, "Hotel")}
                     />
                   ))
                 ) : (
@@ -917,6 +993,9 @@ const renderCoupons = () => (
     return renderProfileTab();
   };
 
+  const isTourBookingSelected =
+    selectedBookingType === "Tour" || Boolean(selectedBooking?.tourId);
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <View className="flex-1">
@@ -995,128 +1074,17 @@ const renderCoupons = () => (
         </ScrollView>
       </View>
 
-      <Modal
-        animationType="slide"
-        transparent
-        visible={showBookingModal}
-        onRequestClose={handleCloseBookingModal}
-      >
-        <SafeAreaView className="flex-1 bg-black/35 items-center justify-center px-2">
-          <View className="w-full max-w-[370px] bg-white rounded-2xl border border-slate-200 shadow-lg p-0 overflow-hidden">
-            {/* Header */}
-            <View className="px-5 pt-5 pb-2">
-              <View className="flex-row items-start justify-between">
-                <View className="flex-1 mr-2">
-                  <Text className="text-[22px] leading-7 font-extrabold text-slate-900" numberOfLines={2}>
-                    {selectedBooking?.hotelDetails?.hotelName || "Hotel"}
-                  </Text>
-                  <View className="flex-row items-center mt-1">
-                    <Ionicons name="location-outline" size={12} color="#64748b" />
-                    <Text className="text-[11px] text-slate-500 ml-1">
-                      {selectedBooking?.destination || selectedBooking?.hotelDetails?.destination || "-"}
-                    </Text>
-                  </View>
-                </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <View className={`px-2 py-0.5 rounded border ${statusPillClasses(selectedBooking?.bookingStatus)}`}
-                    style={{ minWidth: 70, alignItems: 'center' }}>
-                    <Text className="text-[10px] font-bold uppercase tracking-wider">
-                      {selectedBooking?.bookingStatus || "-"}
-                    </Text>
-                  </View>
-                  <Text className="text-[10px] text-slate-400 mt-1">
-                    ID: #{String(selectedBooking?.bookingId || "-").slice(-6)}
-                  </Text>
-                </View>
-              </View>
-            </View>
+      <TourBookingDetailsModal
+        visible={showBookingModal && isTourBookingSelected}
+        onClose={handleCloseBookingModal}
+        booking={selectedBooking}
+      />
 
-            {/* Dates */}
-            <View className="flex-row items-center justify-between bg-slate-50 border-y border-slate-100 px-5 py-3">
-              <View>
-                <Text className="text-[9px] font-bold text-slate-400">CHECK-IN</Text>
-                <Text className="text-lg font-extrabold text-slate-900 mt-0.5">{formatLongDate(selectedBooking?.checkInDate)}</Text>
-              </View>
-              <View>
-                <Text className="text-[10px] font-semibold text-slate-400">1 Night</Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text className="text-[9px] font-bold text-slate-400">CHECK-OUT</Text>
-                <Text className="text-lg font-extrabold text-slate-900 mt-0.5">{formatLongDate(selectedBooking?.checkOutDate)}</Text>
-              </View>
-            </View>
-
-            {/* Guest & Room */}
-            <View className="flex-row px-5 pt-3 pb-1">
-              <View className="flex-1 mr-2">
-                <Text className="text-[9px] font-bold text-slate-400">GUEST NAME</Text>
-                <Text className="text-[13px] font-bold text-slate-800 mt-0.5" numberOfLines={1}>
-                  {selectedBooking?.guestDetails?.fullName || selectedBooking?.user?.name || "-"}
-                </Text>
-              </View>
-              <View className="flex-1" style={{ alignItems: "flex-end" }}>
-                <Text className="text-[9px] font-bold text-slate-400">ROOM TYPE</Text>
-                <Text className="text-[13px] font-bold text-slate-800 mt-0.5" numberOfLines={1}>
-                  {selectedBooking?.roomDetails?.[0]?.type || "-"}
-                  <Text className="text-slate-400 font-semibold"> ({toNumber(selectedBooking?.guests)} Guests)</Text>
-                </Text>
-              </View>
-            </View>
-
-            {/* Food Orders */}
-            {!!toList(selectedBooking?.foodDetails).length && (
-              <View className="px-5 pt-2 pb-1">
-                <Text className="text-[9px] font-bold text-orange-500 tracking-wider">FOOD ORDERS</Text>
-                {toList(selectedBooking?.foodDetails).map((food, index) => (
-                  <View key={`${food?._id || food?.foodId || index}`} className="flex-row items-center justify-between mt-1.5">
-                    <Text className="text-[12px] text-slate-700">
-                      {food?.name || "Item"}
-                      <Text className="text-slate-400"> {food?.quantity ? `x${food.quantity}` : ""}</Text>
-                    </Text>
-                    <Text className="text-[12px] font-semibold text-slate-700">
-                      {formatCurrencyINR(toNumber(food?.price) * toNumber(food?.quantity || 1))}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Cost Breakdown */}
-            <View className="bg-slate-50 border-t border-slate-100 px-5 pt-3 pb-2 mt-1">
-              <View className="flex-row items-center justify-between mb-1">
-                <Text className="text-[13px] text-slate-500">Room Base Price</Text>
-                <Text className="text-[13px] text-slate-500">{formatCurrencyINR(calculateBookingCosts(selectedBooking).roomBase)}</Text>
-              </View>
-              <View className="flex-row items-center justify-between mb-1">
-                <Text className="text-[13px] text-slate-500">Food & Beverages</Text>
-                <Text className="text-[13px] text-slate-500">{formatCurrencyINR(calculateBookingCosts(selectedBooking).foodTotal)}</Text>
-              </View>
-              <View className="flex-row items-center justify-between">
-                <Text className="text-[13px] text-slate-500">GST & Taxes (12%)</Text>
-                <Text className="text-[13px] text-slate-500">{formatCurrencyINR(calculateBookingCosts(selectedBooking).gst)}</Text>
-              </View>
-
-              <View className="h-px bg-slate-200 my-2" />
-
-              <View className="flex-row items-center justify-between">
-                <Text className="text-[15px] font-extrabold text-slate-900">Total Paid</Text>
-                <Text className="text-[28px] leading-8 font-black text-slate-900">
-                  {formatCurrencyINR(calculateBookingCosts(selectedBooking).totalPaid).replace("₹", "₹")}
-                </Text>
-              </View>
-            </View>
-
-            {/* Close Button */}
-            <TouchableOpacity
-              onPress={handleCloseBookingModal}
-              className="mx-5 my-4 h-10 rounded-lg bg-slate-900 items-center justify-center"
-              activeOpacity={0.85}
-            >
-              <Text className="text-white font-bold text-base">Close</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
+      <HotelBookingsDetailModal
+        visible={showBookingModal && !isTourBookingSelected}
+        onClose={handleCloseBookingModal}
+        booking={selectedBooking}
+      />
 
       <Modal
         animationType="slide"
