@@ -1,9 +1,9 @@
 import './global.css';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { navigationRef } from './utils/navigation';
-import { Provider } from 'react-redux';
-import { store } from './store';
+import { Provider, useDispatch } from 'react-redux';
+import { resetAppState, store } from './store';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -11,8 +11,10 @@ import { Text, View, ActivityIndicator, Platform, TouchableOpacity } from 'react
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import ThemedStatusBar from './components/ThemedStatusBar';
 import { requestStartupPermissionsIfNeeded } from './utils/startupPermissions';
+import { baseURL } from './utils/baseUrl';
 
 import BootScreen from './screens/BootScreen';
 import LoginPage from './screens/LoginRN';
@@ -24,11 +26,24 @@ import TourDetails from './screens/TourDetails';
 import Hotels from './screens/Hotels';
 import HotelDetails from './screens/HotelDetails';
 import Profile from './screens/Profile';
+import ServerUnavailable from './screens/ServerUnavailable';
+import { fetchLocation } from './store/slices/locationSlice';
+import { searchHotel, frontHotels } from './store/slices/hotelSlice';
+import { getBeds, getRooms } from './store/slices/additionalSlice';
+import { fetchProfileData } from './store/slices/userSlice';
+import { fetchUserCoupons } from './store/slices/couponSlice';
+import { fetchFilteredBooking } from './store/slices/bookingSlice';
+import { fetchUserComplaints } from './store/slices/complaintSlice';
+import { fetchAllCabs } from './store/slices/cabSlice';
+import { fetchTourList, fetchUserTourBookings } from './store/slices/tourSlice';
+import { getUserId } from './utils/credentials';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const SearchStack = createNativeStackNavigator();
 const HotelStack = createNativeStackNavigator();
+const HEALTH_POLL_INTERVAL_MS = 8000;
+const HEALTH_TIMEOUT_MS = 5000;
 
 // Professional Tab Bar Component
 function TabBar({ state, descriptors, navigation }) {
@@ -218,6 +233,121 @@ function RootNavigator() {
   );
 }
 
+function HealthAwareNavigator() {
+  const dispatch = useDispatch();
+  const { isSignedIn } = useAuth();
+
+  const [healthStatus, setHealthStatus] = useState("checking");
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [navigationReloadKey, setNavigationReloadKey] = useState(0);
+
+  const wasServerDownRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  const refetchGlobalData = useCallback(async () => {
+    dispatch(fetchLocation());
+    dispatch(frontHotels());
+    dispatch(fetchTourList());
+    dispatch(fetchAllCabs());
+    dispatch(getBeds());
+    dispatch(getRooms());
+    dispatch(searchHotel({ page: 1, limit: 50, countRooms: 1 }));
+
+    if (isSignedIn) {
+      const userId = await getUserId();
+      dispatch(fetchProfileData());
+      dispatch(fetchUserCoupons());
+
+      if (userId) {
+        dispatch(fetchFilteredBooking({ userId, page: 1, limit: 10 }));
+        dispatch(fetchUserTourBookings({ userId, page: 1, limit: 10 }));
+        dispatch(fetchUserComplaints({ userId }));
+      }
+    }
+  }, [dispatch, isSignedIn]);
+
+  const handleServerRecovered = useCallback(() => {
+    dispatch(resetAppState());
+    setNavigationReloadKey((prev) => prev + 1);
+
+    setTimeout(() => {
+      if (!mountedRef.current) return;
+      void refetchGlobalData();
+    }, 60);
+  }, [dispatch, refetchGlobalData]);
+
+  const checkHealth = useCallback(
+    async ({ isManual = false } = {}) => {
+      if (isManual) {
+        setIsRetrying(true);
+      }
+
+      try {
+        const response = await axios.get(`${baseURL}/health`, {
+          timeout: HEALTH_TIMEOUT_MS,
+        });
+        const isHealthy = response?.status >= 200 && response?.status < 300;
+        if (!isHealthy) {
+          throw new Error("Health check failed");
+        }
+
+        if (!mountedRef.current) return false;
+
+        setHealthStatus("up");
+        if (wasServerDownRef.current) {
+          wasServerDownRef.current = false;
+          handleServerRecovered();
+        }
+        return true;
+      } catch {
+        if (!mountedRef.current) return false;
+
+        wasServerDownRef.current = true;
+        setHealthStatus("down");
+        return false;
+      } finally {
+        if (isManual) {
+          setIsRetrying(false);
+        }
+      }
+    },
+    [handleServerRecovered]
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    checkHealth({ isManual: true });
+
+    const intervalId = setInterval(() => {
+      checkHealth();
+    }, HEALTH_POLL_INTERVAL_MS);
+
+    return () => {
+      mountedRef.current = false;
+      clearInterval(intervalId);
+    };
+  }, [checkHealth]);
+
+  if (healthStatus === "down") {
+    return (
+      <ServerUnavailable
+        onRetry={() => checkHealth({ isManual: true })}
+        isRetrying={isRetrying}
+      />
+    );
+  }
+
+  if (healthStatus !== "up") {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <NavigationContainer key={`nav-${navigationReloadKey}`} ref={navigationRef}>
+      <RootNavigator />
+    </NavigationContainer>
+  );
+}
+
 export default function App() {
   return (
     <Provider store={store}>
@@ -225,9 +355,7 @@ export default function App() {
         <ThemeProvider>
           <SafeAreaProvider>
             <ThemedStatusBar />
-            <NavigationContainer ref={navigationRef}>
-              <RootNavigator />
-            </NavigationContainer>
+            <HealthAwareNavigator />
           </SafeAreaProvider>
         </ThemeProvider>
       </AuthProvider>
