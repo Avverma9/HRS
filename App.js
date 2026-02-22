@@ -26,7 +26,7 @@ import Tour from './screens/Tour';
 import TourDetails from './screens/TourDetails';
 import Hotels from './screens/Hotels';
 import HotelDetails from './screens/HotelDetails';
-import CabDetails from './screens/CabDetails';
+import CabDetails from './screens/CabDetails.jsx';
 import Profile from './screens/Profile';
 import ServerUnavailable from './screens/ServerUnavailable';
 import { fetchLocation } from './store/slices/locationSlice';

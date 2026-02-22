@@ -32,6 +32,7 @@ import {
   sendComplaintChat,
 } from "../store/slices/complaintSlice";
 import { fetchUserTourBookings } from "../store/slices/tourSlice";
+import { fetchUserCabBookings } from "../store/slices/cabSlice";
 import {
   ComplaintCardSkeleton,
   CouponCardSkeleton,
@@ -42,6 +43,7 @@ import {
 } from "../components/skeleton/ProfileSkeleton";
 import HotelBookingsDetailModal from "../components/HotelBookingsDetailModal";
 import TourBookingDetailsModal from "../components/TourBookingDetailsModal";
+import { getUserId } from "../utils/credentials";
 
 const TABS = ["Bookings", "Coupons", "Complaints", "Profile"];
 const BOOKING_TYPES = ["Tour", "Cabs", "Hotel"];
@@ -200,6 +202,14 @@ const getTourSeatCount = (booking) => {
   return toNumber(booking?.numberOfAdults) + toNumber(booking?.numberOfChildren);
 };
 
+const getCabDisplayName = (booking) => {
+  const make = booking?.carId?.make || booking?.make || "";
+  const model = booking?.carId?.model || booking?.model || "";
+  const combined = `${make} ${model}`.trim();
+  if (combined) return combined;
+  return booking?.vehicleType || "Cab Booking";
+};
+
 const BookingCard = ({ item, onViewBooking }) => {
   const hotelName = item?.hotelDetails?.hotelName || "Hotel";
   const destination = item?.destination || item?.hotelDetails?.destination || "-";
@@ -303,6 +313,7 @@ const Profile = ({ navigation }) => {
   const [showComplaintChatModal, setShowComplaintChatModal] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const complaintChatScrollRef = useRef(null);
+  const [storedUserId, setStoredUserId] = useState(null);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [updateForm, setUpdateForm] = useState({
@@ -332,6 +343,11 @@ const Profile = ({ navigation }) => {
   const tourBookings = Array.isArray(tourState?.userTourBookings) ? tourState.userTourBookings : [];
   const tourBookingsLoading = tourState?.userTourBookingsStatus === "loading";
   const tourBookingsError = tourState?.userTourBookingsError;
+  const cabState = useSelector((state) => state.cab);
+  const cabBookings = Array.isArray(cabState?.userCabBookings) ? cabState.userCabBookings : [];
+  const cabBookingsLoading = cabState?.userCabBookingsStatus === "loading";
+  const cabBookingsError = cabState?.userCabBookingsError;
+  const cabBookingsPagination = cabState?.userCabBookingsPagination || null;
 
   const user = userState?.data || {};
   const coupons = toList(couponsState?.items);
@@ -357,8 +373,16 @@ const Profile = ({ navigation }) => {
   }, [selectedComplaint?.chats]);
 
   const userId = useMemo(
-    () => user?.userId || userState?.userId || null,
-    [user?.userId, userState?.userId]
+    () =>
+      storedUserId ||
+      user?.userId ||
+      user?.id ||
+      user?._id ||
+      userState?.userId ||
+      userState?.id ||
+      userState?._id ||
+      null,
+    [storedUserId, user?.userId, user?.id, user?._id, userState?.userId, userState?.id, userState?._id]
   );
 
   const [page, setPage] = useState(1);
@@ -368,6 +392,27 @@ const Profile = ({ navigation }) => {
     dispatch(fetchProfileData());
     dispatch(fetchUserCoupons());
   }, [dispatch]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const authUserId = await getUserId();
+        if (mounted) {
+          setStoredUserId(authUserId || null);
+        }
+      } catch {
+        if (mounted) {
+          setStoredUserId(null);
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -410,7 +455,7 @@ const Profile = ({ navigation }) => {
       limit,
     };
 
-    if (bookingType !== "Tour" && bookingStatusFilter !== "All") {
+    if (bookingType === "Hotel" && bookingStatusFilter !== "All") {
       payload.selectedStatus = bookingStatusFilter;
     }
 
@@ -421,6 +466,11 @@ const Profile = ({ navigation }) => {
 
     if (bookingType === "Tour") {
       dispatch(fetchUserTourBookings(payload));
+      return;
+    }
+
+    if (bookingType === "Cabs") {
+      dispatch(fetchUserCabBookings(payload));
     }
   }, [dispatch, activeTab, bookingType, bookingStatusFilter, userId, page]);
 
@@ -565,6 +615,7 @@ const Profile = ({ navigation }) => {
   const renderBookings = () => {
     const isHotel = bookingType === "Hotel";
     const isTour = bookingType === "Tour";
+    const isCab = bookingType === "Cabs";
 
     return (
       <View className="flex-1">
@@ -679,11 +730,129 @@ const Profile = ({ navigation }) => {
               </>
             )}
           </View>
-        ) : !isHotel ? (
-          <View className="bg-white rounded-xl border border-slate-200 p-4 mb-3">
-            <Text className="text-xs text-slate-500 font-medium text-center">
-              {bookingType} bookings are not available yet.
-            </Text>
+        ) : isCab ? (
+          <View className="flex-1">
+            {cabBookingsLoading && (
+              <View>
+                {[0, 1, 2].map((idx) => (
+                  <HotelBookingCardSkeleton key={`cab-skeleton-${idx}`} />
+                ))}
+              </View>
+            )}
+
+            {!!cabBookingsError && !cabBookingsLoading && (
+              <View className="bg-white rounded-xl border border-red-200 p-4">
+                <Text className="text-xs text-red-600 font-bold">
+                  {String(cabBookingsError?.message || cabBookingsError || "Unable to load cab bookings")}
+                </Text>
+              </View>
+            )}
+
+            {!cabBookingsLoading && !cabBookingsError && (
+              <>
+                {cabBookings.length ? (
+                  cabBookings.map((item, index) => {
+                    const status = item?.bookingStatus || item?.status || "Pending";
+                    const seats = toList(item?.seats);
+                    const seatSummary = seats.length ? `${seats.length} seat(s)` : "Private trip";
+                    const vehicleNumber = item?.vehicleNumber || item?.carId?.vehicleNumber || "-";
+                    const cabName = getCabDisplayName(item);
+
+                    return (
+                      <View
+                        key={item?._id || item?.bookingId || String(index)}
+                        className="bg-white rounded-2xl border border-slate-200 p-4 mb-3"
+                      >
+                        <View className="flex-row items-start justify-between">
+                          <View className="flex-1 mr-3">
+                            <Text className="text-base font-extrabold text-slate-900" numberOfLines={1}>
+                              {cabName}
+                            </Text>
+                            <Text className="text-xs text-slate-500 mt-1" numberOfLines={1}>
+                              {vehicleNumber} • {item?.sharingType || "Private"}
+                            </Text>
+                            <Text className="text-[11px] text-slate-400 mt-1">
+                              Booking ID: {item?.bookingId || item?._id || "-"}
+                            </Text>
+                          </View>
+
+                          <View className={`px-3 py-1.5 rounded-full border ${statusPillClasses(status)}`}>
+                            <Text className="text-[10px] font-bold uppercase">{String(status)}</Text>
+                          </View>
+                        </View>
+
+                        <View className="mt-3 bg-slate-50 rounded-xl border border-slate-100 p-3">
+                          <View className="flex-row items-center">
+                            <Ionicons name="navigate-outline" size={14} color="#64748b" />
+                            <Text className="text-xs text-slate-700 ml-2" numberOfLines={1}>
+                              {item?.pickupP || "-"} -> {item?.dropP || "-"}
+                            </Text>
+                          </View>
+                          <View className="flex-row items-center justify-between mt-2">
+                            <Text className="text-[11px] text-slate-500">
+                              {formatLongDate(item?.pickupD)} - {formatLongDate(item?.dropD)}
+                            </Text>
+                            <Text className="text-[11px] font-bold text-slate-700">{seatSummary}</Text>
+                          </View>
+                        </View>
+
+                        <View className="mt-3 border-t border-slate-100 pt-3 flex-row items-center justify-between">
+                          <View>
+                            <Text className="text-[11px] text-slate-400">Total Amount</Text>
+                            <Text className="text-lg font-black text-slate-900">
+                              {formatCurrencyINR(item?.price)}
+                            </Text>
+                          </View>
+                          <View className="px-3 py-1.5 rounded-lg bg-slate-100">
+                            <Text className="text-[11px] font-bold text-slate-600">
+                              {item?.customerMobile || "-"}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <View className="py-10 items-center justify-center bg-white rounded-xl border border-slate-200">
+                    <Text className="text-sm font-bold text-slate-700">No cab bookings found</Text>
+                  </View>
+                )}
+
+                {cabBookingsPagination ? (
+                  <View className="flex-row items-center justify-between py-3">
+                    <Text className="text-xs text-slate-500">
+                      Page {cabBookingsPagination?.currentPage || page} / {cabBookingsPagination?.totalPages || 1}
+                    </Text>
+                    <View className="flex-row">
+                      <TouchableOpacity
+                        disabled={!cabBookingsPagination?.hasPrevPage}
+                        onPress={() => setPage((p) => Math.max(1, p - 1))}
+                        className={`px-3 h-10 rounded-xl border items-center justify-center mr-2 ${
+                          cabBookingsPagination?.hasPrevPage ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-100"
+                        }`}
+                      >
+                        <Text className={`text-xs font-bold ${cabBookingsPagination?.hasPrevPage ? "text-slate-700" : "text-slate-300"}`}>
+                          Previous
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        disabled={!cabBookingsPagination?.hasNextPage}
+                        onPress={() => setPage((p) => p + 1)}
+                        className={`px-3 h-10 rounded-xl border items-center justify-center ${
+                          cabBookingsPagination?.hasNextPage ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-100"
+                        }`}
+                      >
+                        <Text className={`text-xs font-bold ${cabBookingsPagination?.hasNextPage ? "text-slate-700" : "text-slate-300"}`}>
+                          Next
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ height: 12 }} />
+                )}
+              </>
+            )}
           </View>
         ) : (
           <View className="flex-1">

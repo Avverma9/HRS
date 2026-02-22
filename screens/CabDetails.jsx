@@ -22,6 +22,7 @@ import {
   resetSelectedCab,
 } from "../store/slices/cabSlice";
 import { useAppModal } from "../contexts/AppModalContext";
+import { getUserId } from "../utils/credentials";
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -228,6 +229,12 @@ export default function CabDetails({ navigation, route }) {
       return;
     }
 
+    const loggedInUserId = await getUserId();
+    if (!loggedInUserId) {
+      showError("Login Required", "Please login to continue booking.");
+      return;
+    }
+
     const passengerName = String(bookedBy || "").trim();
     const mobile = String(customerMobile || "").replace(/[^\d]/g, "").trim();
     const email = String(customerEmail || "").trim();
@@ -277,6 +284,7 @@ export default function CabDetails({ navigation, route }) {
     }
 
     const payload = {
+      userId: String(loggedInUserId),
       sharingType: String(cab?.sharingType || "Private"),
       vehicleType: String(cab?.vehicleType || "Car"),
       carId: String(cab?._id),

@@ -8,6 +8,16 @@ const normalizeCabList = (payload) => {
   return [];
 };
 
+const normalizeCabBookingList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.bookings)) return payload.bookings;
+  if (Array.isArray(payload?.result)) return payload.result;
+  if (Array.isArray(payload?.data?.bookings)) return payload.data.bookings;
+  if (Array.isArray(payload?.data?.data)) return payload.data.data;
+  return [];
+};
+
 const normalizeCabItem = (payload) => {
   if (!payload) return null;
   if (payload?._id) return payload;
@@ -62,6 +72,7 @@ const sanitizeCabBookingPayload = (payload = {}) => {
   const safePrice = Number(payload?.price);
   const safeGstPrice = Number(payload?.gstPrice);
   const bookingPayload = {
+    userId: String(payload?.userId || "").trim(),
     sharingType,
     vehicleType: String(payload?.vehicleType || "").trim(),
     carId: String(payload?.carId || "").trim(),
@@ -159,6 +170,9 @@ export const createCabBooking = createAsyncThunk(
       if (!bookingPayload.carId) {
         return rejectWithValue({ message: "Car id is required." });
       }
+      if (!bookingPayload.userId) {
+        return rejectWithValue({ message: "User id is required." });
+      }
       if (!bookingPayload.bookedBy) {
         return rejectWithValue({ message: "Booked by is required." });
       }
@@ -200,6 +214,42 @@ export const createCabBooking = createAsyncThunk(
   }
 );
 
+export const fetchUserCabBookings = createAsyncThunk(
+  "cab/fetchUserCabBookings",
+  async (payload = {}, { rejectWithValue }) => {
+    try {
+      const userId = String(payload?.userId || payload || "").trim();
+      if (!userId) {
+        return rejectWithValue({ message: "User id is required." });
+      }
+
+      const queryParams = sanitizeCabFilterParams({
+        page: payload?.page,
+        limit: payload?.limit,
+        selectedStatus: payload?.selectedStatus,
+      });
+
+      const response = await api.get(`/travel/get-bookings-by/user/${userId}`, {
+        params: queryParams,
+      });
+
+      return {
+        items: normalizeCabBookingList(response?.data),
+        message: response?.data?.message || null,
+        pagination:
+          response?.data?.pagination ||
+          response?.data?.meta ||
+          response?.data?.data?.pagination ||
+          null,
+      };
+    } catch (error) {
+      return rejectWithValue(
+        error?.response?.data || { message: error?.message || "Unable to fetch cab bookings" }
+      );
+    }
+  }
+);
+
 const cabSlice = createSlice({
   name: "cab",
   initialState: {
@@ -213,6 +263,10 @@ const cabSlice = createSlice({
     cabBookingStatus: "idle",
     cabBookingError: null,
     cabBookingData: null,
+    userCabBookings: [],
+    userCabBookingsStatus: "idle",
+    userCabBookingsError: null,
+    userCabBookingsPagination: null,
   },
   reducers: {
     resetCabState: (state) => {
@@ -226,6 +280,10 @@ const cabSlice = createSlice({
       state.cabBookingStatus = "idle";
       state.cabBookingError = null;
       state.cabBookingData = null;
+      state.userCabBookings = [];
+      state.userCabBookingsStatus = "idle";
+      state.userCabBookingsError = null;
+      state.userCabBookingsPagination = null;
     },
     resetSelectedCab: (state) => {
       state.selectedCab = null;
@@ -236,6 +294,12 @@ const cabSlice = createSlice({
       state.cabBookingStatus = "idle";
       state.cabBookingError = null;
       state.cabBookingData = null;
+    },
+    resetUserCabBookings: (state) => {
+      state.userCabBookings = [];
+      state.userCabBookingsStatus = "idle";
+      state.userCabBookingsError = null;
+      state.userCabBookingsPagination = null;
     }
   },
   extraReducers: (builder) => {
@@ -292,9 +356,24 @@ const cabSlice = createSlice({
       .addCase(createCabBooking.rejected, (state, action) => {
         state.cabBookingStatus = "failed";
         state.cabBookingError = action.payload || { message: "Failed to create cab booking" };
+      })
+      .addCase(fetchUserCabBookings.pending, (state) => {
+        state.userCabBookingsStatus = "loading";
+        state.userCabBookingsError = null;
+      })
+      .addCase(fetchUserCabBookings.fulfilled, (state, action) => {
+        state.userCabBookingsStatus = "succeeded";
+        state.userCabBookings = Array.isArray(action.payload?.items) ? action.payload.items : [];
+        state.userCabBookingsPagination = action.payload?.pagination || null;
+      })
+      .addCase(fetchUserCabBookings.rejected, (state, action) => {
+        state.userCabBookingsStatus = "failed";
+        state.userCabBookingsError = action.payload || { message: "Failed to fetch cab bookings" };
+        state.userCabBookings = [];
+        state.userCabBookingsPagination = null;
       });
   },
 });
 
-export const { resetCabState, resetSelectedCab, resetCabBookingState } = cabSlice.actions;
+export const { resetCabState, resetSelectedCab, resetCabBookingState, resetUserCabBookings } = cabSlice.actions;
 export default cabSlice.reducer;
