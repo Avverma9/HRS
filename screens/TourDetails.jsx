@@ -1,7 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   Text,
@@ -21,6 +20,7 @@ import {
   tourBooking,
 } from "../store/slices/tourSlice";
 import TourDetailsSkeleton from "../components/skeleton/TourDetailsSkeleton";
+import { useAppModal } from "../contexts/AppModalContext";
 // --- Helper Functions ---
 const toNumber = (value) => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -345,6 +345,7 @@ const SeatButton = ({ seat, selected, booked, onPress }) => {
 
 export default function TourDetails({ navigation, route }) {
   const dispatch = useDispatch();
+  const { showError, showSuccess } = useAppModal();
   const {
     selectedTour,
     selectedTourStatus,
@@ -534,7 +535,7 @@ export default function TourDetails({ navigation, route }) {
 
   const openBooking = () => {
     if (!selectedVehicle?._id || !allSeatLabels.length) {
-      Alert.alert(
+      showError(
         "No seats available",
         "No seats available for this tour right now.",
       );
@@ -572,12 +573,12 @@ export default function TourDetails({ navigation, route }) {
 
   const submitBooking = async () => {
     if (!selectedVehicle?._id) {
-      Alert.alert("Error", "Vehicle not selected");
+      showError("Error", "Vehicle not selected");
       return;
     }
     const detailsError = validatePassengerDetails();
     if (detailsError) {
-      Alert.alert("Incomplete Details", detailsError);
+      showError("Incomplete Details", detailsError);
       return;
     }
 
@@ -631,22 +632,22 @@ export default function TourDetails({ navigation, route }) {
         res?.data?._id ||
         res?.data?.data?.bookingId ||
         null;
-      Alert.alert(
+      showSuccess(
         "Success",
         bookingId
           ? `Booking confirmed!\nID: ${bookingId}`
           : "Booking confirmed successfully!",
-        [{ text: "OK", onPress: () => {
+        { onPrimary: () => {
             setBookingOpen(false);
             setBookingStep(1);
             setSelectedSeats([]);
             setPassengerForm({});
             setMobileNumber("");
             navigation.goBack();
-        }}]
+        }}
       );
     } catch (err) {
-      Alert.alert(
+      showError(
         "Booking Failed",
         String(err?.message || "Unable to create booking"),
       );
@@ -1285,7 +1286,7 @@ export default function TourDetails({ navigation, route }) {
                       <TouchableOpacity 
                           onPress={() => {
                               const err = validatePassengerDetails();
-                              if(err) Alert.alert("Missing Details", err);
+                              if(err) showError("Missing Details", err);
                               else setBookingStep(3);
                           }}
                           className="w-full bg-blue-600 py-4 rounded-2xl flex-row justify-center items-center shadow-lg shadow-blue-200"

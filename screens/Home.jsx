@@ -9,6 +9,7 @@ import SearchCard from "../components/SearchCard";
 import PopularDestinations from "../components/PopularDestinations";
 import HomeScreenFrontHotels from "./HomeScreenFrontHotels";
 import HomeScreenFrontTour from "./HomeScreenFrontTour";
+import HomeScreenFrontCabs from "./HomeScreenFrontCabs";
 
 const Home = ({ navigation }) => {
   // --- State Management ---
@@ -238,6 +239,7 @@ const Home = ({ navigation }) => {
         <PopularDestinations locations={locations} onSelectLocation={handleSelect} />
         <HomeScreenFrontHotels />
         <HomeScreenFrontTour />
+        <HomeScreenFrontCabs />
 
         {/* Footer Brand */}
         <View className="px-4 mt-6 mb-0">

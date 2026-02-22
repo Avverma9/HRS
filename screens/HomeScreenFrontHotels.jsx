@@ -14,6 +14,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { frontHotels } from "../store/slices/hotelSlice";
 import { Ionicons } from "@expo/vector-icons";
 import HomeScreenFrontHotelsSkeleton from "../components/skeleton/HomeScreenFrontHotelsSkeleton";
+import { extractHotelAmenities, getTopHotelAmenities } from "../utils/amenities";
 
 // ---------- helpers ----------
 const safeText = (v, fallback = "") =>
@@ -67,12 +68,14 @@ function TinyFireIcon() {
   );
 }
 
-const HotelCard = ({ hotel, onPress }) => {
+const HotelCard = ({ hotel, onPress, fallbackAmenities = [] }) => {
   const title = safeText(hotel?.hotelName, "Hotel Name");
   const city = safeText(hotel?.city, "Location");
   const rating = formatRating(hotel?.rating);
   const img = getFirstImage(hotel);
   const price = getMinPrice(hotel) || 1500;
+  const cardAmenities = getTopHotelAmenities(hotel, 3);
+  const topAmenities = [...cardAmenities, ...fallbackAmenities.filter((a) => !cardAmenities.includes(a))].slice(0, 3);
   // Calculate a fake "original" price for display purposes (e.g. +20-40%)
   const originalPrice = Math.round(price * 1.35);
 
@@ -124,6 +127,21 @@ const HotelCard = ({ hotel, onPress }) => {
             </Text>
           </View>
 
+          {!!topAmenities.length && (
+            <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
+              {topAmenities.map((amenity, idx) => (
+                <View
+                  key={`${amenity}-${idx}`}
+                  className="px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200"
+                >
+                  <Text className="text-[10px] font-bold text-slate-600" numberOfLines={1}>
+                    {amenity}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Price Row */}
           <View className="flex-row items-baseline mt-3">
             <Text className="text-[#0d3b8f] font-extrabold text-[18px]">
@@ -173,6 +191,10 @@ export default function HomeScreenFrontHotels() {
   };
 
   const hotels = useMemo(() => (Array.isArray(hotelsRaw) ? hotelsRaw : []), [hotelsRaw]);
+  const fallbackAmenities = useMemo(() => {
+    const amenityPool = hotels.flatMap((hotel) => extractHotelAmenities(hotel));
+    return [...new Set(amenityPool.map((item) => String(item || "").trim()).filter(Boolean))];
+  }, [hotels]);
 
   return (
     <View className="flex-1 bg-white">
@@ -270,7 +292,8 @@ export default function HomeScreenFrontHotels() {
             <HotelCard
               key={hotel._id || hotel.hotelId || idx}
               hotel={hotel}
-              onPress={() => handleNavigate(hotel.hotelId)}
+              fallbackAmenities={fallbackAmenities}
+              onPress={() => handleNavigate(hotel.hotelId || hotel._id)}
             />
           ))}
         </ScrollView>

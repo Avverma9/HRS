@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   ScrollView,
   Text,
   TextInput,
@@ -11,8 +12,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigation } from "@react-navigation/native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import { fetchAllCabs } from "../store/slices/cabSlice";
+import { fetchAllCabs, filterCabsByQuery } from "../store/slices/cabSlice";
+import CabsSkeleton from "../components/skeleton/CabsSkeleton";
 
 const FILTERS = ["All", "Car", "Bus", "Shared", "Private"];
 
@@ -21,33 +24,170 @@ const formatDate = (d) =>
 const formatTime = (d) =>
   new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 
+const normalizeBool = (value) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+    if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  }
+  return null;
+};
+
+const isSeatBooked = (seat) => {
+  const direct = normalizeBool(seat?.isBooked ?? seat?.booked ?? seat?.isSeatBooked);
+  if (direct !== null) return direct;
+
+  const status = String(seat?.status || seat?.seatStatus || "").trim().toLowerCase();
+  if (status.includes("book")) return true;
+  if (status.includes("open") || status.includes("available") || status.includes("vacant")) return false;
+  return false;
+};
+
 const getTotalSeats = (cab) => {
   const configured = Array.isArray(cab?.seatConfig) ? cab.seatConfig.length : 0;
   const seater = Number(cab?.seater);
-  return Number.isFinite(seater) && seater > 0 ? seater : configured;
+  const declared = Number.isFinite(seater) && seater > 0 ? seater : 0;
+  return Math.max(declared, configured);
 };
+
+const getBookedSeats = (cab) =>
+  (Array.isArray(cab?.seatConfig) ? cab.seatConfig : []).filter((seat) => isSeatBooked(seat)).length;
 
 const getFare = (cab) =>
   String(cab?.sharingType || "").toLowerCase() === "shared" ? cab?.perPersonCost : cab?.price;
 
+const resolveCabBookingState = (cab) => {
+  const isRunning = normalizeBool(cab?.isRunning);
+  if (isRunning === false) {
+    return { key: "unavailable", label: "Unavailable", canBook: false };
+  }
+
+  const totalSeats = getTotalSeats(cab);
+  const bookedSeats = getBookedSeats(cab);
+  if (totalSeats > 0 && bookedSeats >= totalSeats) {
+    return { key: "fullyBooked", label: "Fully Booked", canBook: false };
+  }
+
+  const isAvailable = normalizeBool(cab?.isAvailable);
+  if (isAvailable === false) {
+    return { key: "unavailable", label: "Unavailable", canBook: false };
+  }
+
+  const status = String(cab?.runningStatus || "").trim().toLowerCase();
+  if (status.includes("unavailable") || status.includes("not available")) {
+    return { key: "unavailable", label: "Unavailable", canBook: false };
+  }
+
+  return { key: "available", label: "Available", canBook: true };
+};
+
+const matchesCabSearchQuery = (cab, query) => {
+  if (!query) return true;
+  const normalized = query.toLowerCase();
+  const searchableFields = [
+    cab?.make,
+    cab?.model,
+    cab?.vehicleNumber,
+    cab?.fuelType,
+    cab?.seater,
+    cab?.pickupP,
+    cab?.dropP,
+    cab?.pickupD,
+    cab?.dropD,
+  ];
+  return searchableFields.some((field) =>
+    String(field ?? "").toLowerCase().includes(normalized)
+  );
+};
+
 export default function Cabs() {
+  const navigation = useNavigation();
   const dispatch = useDispatch();
   const { items: cabItems, status, error } = useSelector((s) => s.cab || {});
 
   const [route, setRoute] = useState({ pickup: "", drop: "" });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showFilterDock, setShowFilterDock] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    make: "",
+    model: "",
+    vehicleNumber: "",
+    fuelType: "",
+    seater: "",
+    pickupD: "",
+    dropD: "",
+  });
   const [selectedCabType, setSelectedCabType] = useState("All");
   const [isSearching, setIsSearching] = useState(false);
 
   const [pickupDateTime, setPickupDateTime] = useState(new Date());
+  const [hasEditedPickupDateTime, setHasEditedPickupDateTime] = useState(false);
   const [openPicker, setOpenPicker] = useState(null);
 
+  const activeDockFilterCount = useMemo(() => {
+    return Object.values(advancedFilters).filter((value) => String(value || "").trim()).length;
+  }, [advancedFilters]);
+
+  const queryParams = useMemo(() => {
+    const next = {};
+    const pickup = route.pickup.trim();
+    const drop = route.drop.trim();
+    const q = searchQuery.trim();
+
+    if (q) {
+      next.q = q;
+      next.searchQuery = q;
+    }
+    if (pickup) next.pickupP = pickup;
+    if (drop) next.dropP = drop;
+    if (hasEditedPickupDateTime) next.pickupD = pickupDateTime.toISOString();
+    if (advancedFilters.make.trim()) next.make = advancedFilters.make.trim();
+    if (advancedFilters.model.trim()) next.model = advancedFilters.model.trim();
+    if (advancedFilters.vehicleNumber.trim()) next.vehicleNumber = advancedFilters.vehicleNumber.trim();
+    if (advancedFilters.fuelType.trim()) next.fuelType = advancedFilters.fuelType.trim();
+    if (advancedFilters.seater.trim()) next.seater = advancedFilters.seater.trim();
+    if (advancedFilters.pickupD.trim()) next.pickupD = advancedFilters.pickupD.trim();
+    if (advancedFilters.dropD.trim()) next.dropD = advancedFilters.dropD.trim();
+
+    const hasServerFilters = Object.keys(next).length > 0;
+    if (hasServerFilters) {
+      if (selectedCabType === "Car" || selectedCabType === "Bus") {
+        next.vehicleType = selectedCabType.toLowerCase();
+      }
+      if (selectedCabType === "Shared" || selectedCabType === "Private") {
+        next.sharingType = selectedCabType.toLowerCase();
+      }
+    }
+
+    return next;
+  }, [
+    route.pickup,
+    route.drop,
+    searchQuery,
+    hasEditedPickupDateTime,
+    pickupDateTime,
+    advancedFilters,
+    selectedCabType,
+  ]);
+
   useEffect(() => {
-    if (status === "idle") dispatch(fetchAllCabs());
-  }, [dispatch, status]);
+    const timer = setTimeout(() => {
+      if (Object.keys(queryParams).length === 0) {
+        dispatch(fetchAllCabs());
+        return;
+      }
+      dispatch(filterCabsByQuery(queryParams));
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [dispatch, queryParams]);
 
   const filteredCabs = useMemo(() => {
     const pickup = route.pickup.trim().toLowerCase();
     const drop = route.drop.trim().toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
 
     return (Array.isArray(cabItems) ? cabItems : []).filter((cab) => {
       const vehicleType = String(cab?.vehicleType || "").toLowerCase();
@@ -60,17 +200,41 @@ export default function Cabs() {
 
       if (pickup && !String(cab?.pickupP || "").toLowerCase().includes(pickup)) return false;
       if (drop && !String(cab?.dropP || "").toLowerCase().includes(drop)) return false;
+      if (!matchesCabSearchQuery(cab, query)) return false;
 
       return true;
     });
-  }, [cabItems, selectedCabType, route.pickup, route.drop]);
+  }, [cabItems, selectedCabType, route.pickup, route.drop, searchQuery]);
 
   const handleSwap = () => setRoute((p) => ({ pickup: p.drop, drop: p.pickup }));
+
+  const updateAdvancedFilter = (field, value) => {
+    setAdvancedFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const clearAdvancedFilters = () => {
+    setAdvancedFilters({
+      make: "",
+      model: "",
+      vehicleNumber: "",
+      fuelType: "",
+      seater: "",
+      pickupD: "",
+      dropD: "",
+    });
+  };
+
+  const runCabSearchRequest = async () => {
+    if (Object.keys(queryParams).length === 0) {
+      return dispatch(fetchAllCabs());
+    }
+    return dispatch(filterCabsByQuery(queryParams));
+  };
 
   const handleCabSearch = async () => {
     setIsSearching(true);
     try {
-      await dispatch(fetchAllCabs());
+      await runCabSearchRequest();
     } finally {
       setTimeout(() => setIsSearching(false), 250);
     }
@@ -78,7 +242,7 @@ export default function Cabs() {
 
   return (
     // SafeArea wrapper with dark slate background for top status bar area
-    <SafeAreaView className="flex-1 bg-slate-900" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-[#0d3b8f]" edges={["top"]}>
       <ScrollView
         className="flex-1 bg-slate-50"
         contentContainerStyle={{ paddingBottom: 30 }}
@@ -88,10 +252,10 @@ export default function Cabs() {
         {/* ========================================== */}
         {/* INDEX 0: HEADER & SEARCH CARD              */}
         {/* ========================================== */}
-        <View className="bg-slate-50">
+        <View className="bg-slate-100 border-b border-slate-200">
           
           {/* Header Background */}
-          <View className="bg-slate-900 px-5 pt-4 pb-16 rounded-b-[32px]">
+          <View className="bg-[#0d3b8f] px-5 pt-4 pb-16 rounded-b-[32px]">
             <Text className="text-[28px] font-black text-white tracking-tight">Book your ride</Text>
             <Text className="text-[14px] font-medium text-slate-400 mt-1">Comfortable & affordable intercity travel</Text>
           </View>
@@ -131,7 +295,7 @@ export default function Cabs() {
                 onPress={handleSwap}
                 className="absolute right-3 top-1/2 -mt-[18px] h-9 w-9 rounded-full bg-white items-center justify-center border border-slate-200 shadow-sm elevation-2"
               >
-                <Ionicons name="swap-vertical" size={18} color="#0f172a" />
+                <Ionicons name="swap-vertical" size={18} color="#0d3b8f" />
               </TouchableOpacity>
             </View>
 
@@ -146,7 +310,7 @@ export default function Cabs() {
                   <Text className="text-[10px] font-extrabold text-slate-400 tracking-wider mb-0.5 uppercase">Date</Text>
                   <Text className="text-[14px] font-black text-slate-900">{formatDate(pickupDateTime)}</Text>
                 </View>
-                <Ionicons name="calendar" size={18} color="#0f172a" />
+                <Ionicons name="calendar" size={18} color="#0d3b8f" />
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -158,13 +322,13 @@ export default function Cabs() {
                   <Text className="text-[10px] font-extrabold text-slate-400 tracking-wider mb-0.5 uppercase">Time</Text>
                   <Text className="text-[14px] font-black text-slate-900">{formatTime(pickupDateTime)}</Text>
                 </View>
-                <Ionicons name="time" size={18} color="#0f172a" />
+                <Ionicons name="time" size={18} color="#0d3b8f" />
               </TouchableOpacity>
             </View>
 
             {/* Search Button */}
             <TouchableOpacity 
-              className="mt-3 h-12 bg-slate-900 rounded-xl items-center justify-center" 
+              className="mt-3 h-12 bg-[#0d3b8f] rounded-xl items-center justify-center" 
               activeOpacity={0.9} 
               onPress={handleCabSearch}
             >
@@ -180,7 +344,7 @@ export default function Cabs() {
         {/* ========================================== */}
         {/* INDEX 1: STICKY FILTERS                    */}
         {/* ========================================== */}
-        <View className="bg-slate-50 py-3 border-b border-slate-200/50 z-10">
+        <View className="bg-slate-100 py-3 border-b border-slate-200 z-10">
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
             {FILTERS.map((type) => {
               const active = selectedCabType === type;
@@ -188,18 +352,54 @@ export default function Cabs() {
                 <TouchableOpacity
                   key={type}
                   className={`h-[34px] rounded-full px-4 items-center justify-center bg-white border ${
-                    active ? "bg-slate-100 border-slate-900" : "border-slate-300"
+                    active ? "bg-[#0d3b8f] border-[#0d3b8f]" : "border-slate-300"
                   }`}
                   onPress={() => setSelectedCabType(type)}
                   activeOpacity={0.8}
                 >
-                  <Text className={`text-[13px] font-extrabold ${active ? "text-slate-900" : "text-slate-600"}`}>
+                  <Text className={`text-[13px] font-extrabold ${active ? "text-black" : "text-slate-600"}`}>
                     {type}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
+
+          <View className="mt-2 px-4 flex-row items-center" style={{ gap: 8 }}>
+            <View className="h-10 flex-1 rounded-xl bg-white border border-slate-200 px-3 flex-row items-center">
+              <Ionicons name="search" size={16} color="#64748b" />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search make, model, number..."
+                placeholderTextColor="#94a3b8"
+                className="flex-1 ml-2 text-[13px] font-semibold text-slate-800"
+                autoCorrect={false}
+                returnKeyType="search"
+                onSubmitEditing={handleCabSearch}
+              />
+              {!!searchQuery && (
+                <TouchableOpacity onPress={() => setSearchQuery("")} className="p-1" activeOpacity={0.8}>
+                  <Ionicons name="close-circle" size={17} color="#94a3b8" />
+                </TouchableOpacity>
+                )}
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setShowFilterDock(true)}
+              activeOpacity={0.8}
+              className="h-10 w-10 rounded-xl bg-white border border-slate-300 items-center justify-center relative"
+            >
+              <Ionicons name="options-outline" size={17} color="#0d3b8f" />
+              {activeDockFilterCount > 0 && (
+                <View className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-[#0d3b8f] border border-white items-center justify-center px-1">
+                  <Text className="text-[9px] font-black text-white">
+                    {activeDockFilterCount > 9 ? "9+" : activeDockFilterCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ========================================== */}
@@ -211,9 +411,8 @@ export default function Cabs() {
           )}
 
           {status === "loading" && filteredCabs.length === 0 ? (
-            <View className="items-center justify-center py-16 opacity-70">
-              <ActivityIndicator color="#0f172a" size="large" />
-              <Text className="mt-3 text-[16px] font-extrabold text-slate-900">Finding best rides...</Text>
+            <View className="pt-1">
+              <CabsSkeleton count={4} />
             </View>
           ) : filteredCabs.length === 0 ? (
             <View className="items-center justify-center py-16 opacity-70">
@@ -226,6 +425,14 @@ export default function Cabs() {
               const fare = getFare(cab);
               const seats = getTotalSeats(cab);
               const isShared = String(cab?.sharingType || "").toLowerCase() === "shared";
+              const bookingState = resolveCabBookingState(cab);
+              const canBook = bookingState.canBook;
+              const statusChipClasses =
+                bookingState.key === "available"
+                  ? { chip: "bg-emerald-50 border-emerald-200", text: "text-emerald-700" }
+                  : bookingState.key === "fullyBooked"
+                  ? { chip: "bg-amber-50 border-amber-200", text: "text-amber-700" }
+                  : { chip: "bg-rose-50 border-rose-200", text: "text-rose-700" };
 
               return (
                 <View key={cab?._id || `cab-${idx}`} className="bg-white rounded-[20px] border border-slate-200 p-3 mb-3.5 shadow-sm elevation-2">
@@ -255,7 +462,7 @@ export default function Cabs() {
                       </View>
 
                       <Text className="text-[12px] font-bold text-slate-500 mt-0.5">
-                        {cab?.vehicleType || "Car"} • {seats || 0} Seats • {cab?.fuelType || "Petrol"}
+                        {cab?.vehicleType || "Car"} | {seats || 0} Seats | {cab?.fuelType || "Petrol"}
                       </Text>
 
                       <View className="flex-row items-center bg-slate-50 self-start px-2 py-1 rounded-md mt-2">
@@ -272,13 +479,33 @@ export default function Cabs() {
 
                   {/* Bottom Action Row */}
                   <View className="flex-row justify-between items-center mt-3 pt-3 border-t border-slate-100">
-                    <View className="flex-row items-center">
+                    <View className="flex-row items-center flex-1 pr-2">
                       <MaterialCommunityIcons name="shield-check" size={16} color="#10b981" />
-                      <Text className="ml-1 text-[12px] font-extrabold text-emerald-500">Verified Partner</Text>
+                      <Text className="ml-1 text-[12px] font-extrabold text-[#0d3b8f]">Verified Partner</Text>
+                      <View className={`ml-2 px-2 py-1 rounded-md border ${statusChipClasses.chip}`}>
+                        <Text className={`text-[10px] font-extrabold ${statusChipClasses.text}`}>
+                          {bookingState.label}
+                        </Text>
+                      </View>
                     </View>
 
-                    <TouchableOpacity className="bg-slate-900 px-5 h-[34px] rounded-lg items-center justify-center" activeOpacity={0.8}>
-                      <Text className="text-[13px] font-extrabold text-white">Book Now</Text>
+                    <TouchableOpacity
+                      disabled={!canBook}
+                      className={`px-5 h-[34px] rounded-lg items-center justify-center ${
+                        canBook ? "bg-[#0d3b8f]" : "bg-slate-300"
+                      }`}
+                      activeOpacity={canBook ? 0.8 : 1}
+                      onPress={() => {
+                        if (!canBook) return;
+                        navigation.navigate("CabDetails", {
+                          cabId: cab?._id,
+                          cab,
+                        });
+                      }}
+                    >
+                      <Text className={`text-[13px] font-extrabold ${canBook ? "text-white" : "text-slate-500"}`}>
+                        Book Now
+                      </Text>
                     </TouchableOpacity>
                   </View>
 
@@ -288,6 +515,136 @@ export default function Cabs() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showFilterDock}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowFilterDock(false)}
+      >
+        <View className="flex-1 bg-black/40 justify-end">
+          <View className="bg-white rounded-t-3xl px-4 pt-4 pb-5 max-h-[84%]">
+            <View className="flex-row items-center justify-between mb-3">
+              <View>
+                <Text className="text-[17px] font-black text-slate-900">Filter Bar</Text>
+                <Text className="text-[12px] text-slate-500 mt-0.5">
+                  make, model, number, fuel, seats, pickup/drop dates
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowFilterDock(false)}
+                className="h-9 w-9 rounded-full bg-slate-100 items-center justify-center"
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={18} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View className="flex-row" style={{ gap: 10 }}>
+                <View className="flex-1">
+                  <Text className="text-[11px] font-bold text-slate-600 mb-1">Make</Text>
+                  <TextInput
+                    value={advancedFilters.make}
+                    onChangeText={(v) => updateAdvancedFilter("make", v)}
+                    placeholder="Toyota"
+                    placeholderTextColor="#94a3b8"
+                    className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-800"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[11px] font-bold text-slate-600 mb-1">Model</Text>
+                  <TextInput
+                    value={advancedFilters.model}
+                    onChangeText={(v) => updateAdvancedFilter("model", v)}
+                    placeholder="Innova"
+                    placeholderTextColor="#94a3b8"
+                    className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-800"
+                  />
+                </View>
+              </View>
+
+              <View className="mt-3">
+                <Text className="text-[11px] font-bold text-slate-600 mb-1">Vehicle Number</Text>
+                <TextInput
+                  value={advancedFilters.vehicleNumber}
+                  onChangeText={(v) => updateAdvancedFilter("vehicleNumber", v)}
+                  placeholder="UP32AB1234"
+                  placeholderTextColor="#94a3b8"
+                  className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-800"
+                />
+              </View>
+
+              <View className="mt-3 flex-row" style={{ gap: 10 }}>
+                <View className="flex-1">
+                  <Text className="text-[11px] font-bold text-slate-600 mb-1">Fuel Type</Text>
+                  <TextInput
+                    value={advancedFilters.fuelType}
+                    onChangeText={(v) => updateAdvancedFilter("fuelType", v)}
+                    placeholder="Petrol / Diesel"
+                    placeholderTextColor="#94a3b8"
+                    className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-800"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[11px] font-bold text-slate-600 mb-1">Seater</Text>
+                  <TextInput
+                    value={advancedFilters.seater}
+                    onChangeText={(v) => updateAdvancedFilter("seater", v)}
+                    placeholder="4"
+                    keyboardType="number-pad"
+                    placeholderTextColor="#94a3b8"
+                    className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-800"
+                  />
+                </View>
+              </View>
+
+              <View className="mt-3 flex-row" style={{ gap: 10 }}>
+                <View className="flex-1">
+                  <Text className="text-[11px] font-bold text-slate-600 mb-1">Pickup Date</Text>
+                  <TextInput
+                    value={advancedFilters.pickupD}
+                    onChangeText={(v) => updateAdvancedFilter("pickupD", v)}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#94a3b8"
+                    className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-800"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[11px] font-bold text-slate-600 mb-1">Drop Date</Text>
+                  <TextInput
+                    value={advancedFilters.dropD}
+                    onChangeText={(v) => updateAdvancedFilter("dropD", v)}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#94a3b8"
+                    className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-800"
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View className="mt-4 flex-row" style={{ gap: 10 }}>
+              <TouchableOpacity
+                onPress={clearAdvancedFilters}
+                className="flex-1 h-11 rounded-xl bg-slate-100 items-center justify-center"
+                activeOpacity={0.8}
+              >
+                <Text className="text-[13px] font-black text-slate-600">Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => {
+                  setShowFilterDock(false);
+                  await handleCabSearch();
+                }}
+                className="flex-[1.4] h-11 rounded-xl bg-[#0d3b8f] items-center justify-center"
+                activeOpacity={0.8}
+              >
+                <Text className="text-[13px] font-black text-white">Apply Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Date/Time Pickers */}
       <DateTimePickerModal
@@ -301,6 +658,7 @@ export default function Cabs() {
             next.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
             return next;
           });
+          setHasEditedPickupDateTime(true);
           setOpenPicker(null);
         }}
       />
@@ -315,6 +673,7 @@ export default function Cabs() {
             next.setHours(d.getHours(), d.getMinutes(), 0, 0);
             return next;
           });
+          setHasEditedPickupDateTime(true);
           setOpenPicker(null);
         }}
       />

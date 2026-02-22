@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Text, View, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { AppModalProvider } from './contexts/AppModalContext';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import ThemedStatusBar from './components/ThemedStatusBar';
@@ -25,6 +26,7 @@ import Tour from './screens/Tour';
 import TourDetails from './screens/TourDetails';
 import Hotels from './screens/Hotels';
 import HotelDetails from './screens/HotelDetails';
+import CabDetails from './screens/CabDetails';
 import Profile from './screens/Profile';
 import ServerUnavailable from './screens/ServerUnavailable';
 import { fetchLocation } from './store/slices/locationSlice';
@@ -222,6 +224,7 @@ function RootNavigator() {
         <>
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="TourDetails" component={TourDetails} />
+          <Stack.Screen name="CabDetails" component={CabDetails} />
         </>
       ) : (
         <>
@@ -355,7 +358,9 @@ export default function App() {
         <ThemeProvider>
           <SafeAreaProvider>
             <ThemedStatusBar />
-            <HealthAwareNavigator />
+            <AppModalProvider>
+              <HealthAwareNavigator />
+            </AppModalProvider>
           </SafeAreaProvider>
         </ThemeProvider>
       </AuthProvider>

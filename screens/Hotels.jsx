@@ -20,6 +20,12 @@ import { MaterialCommunityIcons, Ionicons, MaterialIcons } from "@expo/vector-ic
 import SearchCard from "../components/SearchCard";
 import SkeletonShimmer from "../components/skeleton/SkeletonShimmer";
 import { HotelCardSkeleton } from "../components/skeleton/HotelSkeleton";
+import {
+  extractHotelAmenities,
+  getAmenityDisplayName,
+  getAmenityIconName,
+  getTopHotelAmenities,
+} from "../utils/amenities";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 32;
@@ -64,6 +70,14 @@ const Hotels = ({ navigation, route }) => {
     count += selectedRoomTypes.length;
     return count;
   }, [priceRange, selectedStar, selectedAmenities, selectedBedTypes, selectedRoomTypes]);
+
+  const availableAmenities = useMemo(() => {
+    const amenityPool = (Array.isArray(hotels) ? hotels : []).flatMap((hotel) =>
+      extractHotelAmenities(hotel)
+    );
+    const unique = [...new Set(amenityPool.map((item) => String(item || "").trim()).filter(Boolean))];
+    return unique;
+  }, [hotels]);
 
   const topPadding = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 
@@ -253,96 +267,85 @@ const Hotels = ({ navigation, route }) => {
   const HotelCard = ({ hotel }) => {
     const title = hotel.hotelName || "Hotel Name";
     const city = hotel.city || "Location";
-    const rating = hotel.rating || "4.2";
-    
-    // Price logic
-    const lowestPrice = hotel.rooms?.length > 0 
-      ? Math.min(...hotel.rooms.map(r => r.price))
-      : 2499;
-    const originalPrice = Math.round(lowestPrice * 1.4); // Mock original price
+    const rawRating = Number(hotel.rating || hotel.starRating || 4.2);
+    const rating = Number.isFinite(rawRating) ? rawRating.toFixed(1) : "4.2";
+    const cardAmenities = getTopHotelAmenities(hotel, 3);
+    const topAmenities = [...cardAmenities, ...availableAmenities.filter((a) => !cardAmenities.includes(a))].slice(0, 3);
 
+    const lowestPrice = hotel.rooms?.length > 0
+      ? Math.min(...hotel.rooms.map((room) => room.price))
+      : 2499;
+    const hotelId = hotel.hotelId || hotel._id;
     const mainImage = hotel.images?.[0] || null;
 
     return (
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => navigation.navigate("HotelDetails", { hotelId: hotel.hotelId })}
-        className="bg-white rounded-[16px] mb-4 overflow-hidden border border-slate-200 shadow-sm mx-4"
+        onPress={() => navigation.navigate("HotelDetails", { hotelId })}
+        className="mx-4 mb-2.5 bg-white rounded-xl border border-slate-200 p-2"
       >
-        {/* Image Section */}
-        <View className="relative h-[200px] w-full bg-slate-200">
-          {mainImage ? (
-            <Image
-              source={{ uri: mainImage }}
-              className="w-full h-full"
-              resizeMode="cover"
-            />
-          ) : (
-            <View className="w-full h-full items-center justify-center">
-              <Ionicons name="image-outline" size={40} color="#cbd5e1" />
-            </View>
-          )}
+        <View className="flex-row h-[120px]">
+          <View className="w-[98px] h-[120px] rounded-[10px] overflow-hidden bg-slate-200 relative">
+            {mainImage ? (
+              <Image source={{ uri: mainImage }} className="w-full h-full" resizeMode="cover" />
+            ) : (
+              <View className="w-full h-full items-center justify-center bg-slate-300">
+                <Ionicons name="image-outline" size={24} color="#94a3b8" />
+              </View>
+            )}
 
-          {/* Rating Badge - Top Right */}
-          <View className="absolute top-3 right-3 bg-white px-2 py-1 rounded flex-row items-center shadow-sm">
-             <Text className="text-slate-900 font-bold text-xs mr-1">{rating}</Text>
-             <Ionicons name="star" size={10} color="#16a34a" />
-          </View>
-
-          {/* Overlay Icons - Bottom Left */}
-          <View className="absolute bottom-3 left-3 flex-row space-x-2">
-            <View className="w-6 h-6 rounded-full bg-black/60 items-center justify-center">
-                <MaterialCommunityIcons name="wifi" size={14} color="white" />
-            </View>
-            <View className="w-6 h-6 rounded-full bg-black/60 items-center justify-center">
-                <MaterialCommunityIcons name="silverware-fork-knife" size={14} color="white" />
+            <View className="absolute top-1.5 left-1.5 rounded-full px-1.5 py-0.5 bg-white/90 border border-slate-200 flex-row items-center">
+              <Ionicons name="star" size={8} color="#f59e0b" />
+              <Text className="text-[9px] font-black text-slate-800 ml-1">{rating}</Text>
             </View>
           </View>
-        </View>
 
-        {/* Content Section */}
-        <View className="p-3">
-          {/* Title */}
-          <Text className="text-[17px] font-bold text-[#0f172a] mb-0.5">
-            {title}
-          </Text>
-          
-          {/* Location */}
-          <View className="flex-row items-center mb-2">
-            <Ionicons name="location-outline" size={14} color="#64748b" />
-            <Text className="text-sm text-slate-500 ml-1">{city}</Text>
-          </View>
+          <View className="flex-1 ml-2.5 justify-between">
+            <View>
+              <Text className="text-[13px] leading-[16px] font-black text-slate-900" numberOfLines={2}>
+                {title}
+              </Text>
 
-          {/* Feature Badge */}
-          <Text className="text-green-600 text-[11px] font-bold uppercase tracking-wide mb-3">
-            Free Cancellation
-          </Text>
+              <View className="flex-row items-center mt-0.5">
+                <Ionicons name="location-sharp" size={10} color="#334155" />
+                <Text className="text-[11px] font-semibold text-slate-600 ml-1" numberOfLines={1}>
+                  {city}
+                </Text>
+              </View>
 
-          {/* Price & Action Row */}
-          <View className="flex-row items-center justify-between mt-1">
-             <View>
-                 <View className="flex-row items-baseline">
-                     <Text className="text-[20px] font-extrabold text-[#0d3b8f]">
-                        ₹{lowestPrice}
-                     </Text>
-                     <Text className="text-xs text-slate-400 font-medium line-through ml-2">
-                        ₹{originalPrice}
-                     </Text>
-                     <Text className="text-xs text-slate-500 font-medium ml-1">/ night</Text>
-                 </View>
-             </View>
+              <View className="mt-1 flex-row flex-wrap" style={{ gap: 4 }}>
+                {topAmenities.map((amenity, idx) => (
+                  <View
+                    key={`${amenity}-${idx}`}
+                    className="px-1.5 py-0.5 rounded-full bg-slate-50 border border-slate-200"
+                  >
+                    <Text className="text-[9px] font-extrabold text-slate-600" numberOfLines={1}>
+                      {amenity}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
 
-             <TouchableOpacity 
-                className="bg-[#0d3b8f] px-5 py-2 rounded-lg"
-             >
-                 <Text className="text-white font-bold text-[13px]">View</Text>
-             </TouchableOpacity>
+            <View className="flex-row items-end justify-between mt-1">
+              <View className="flex-1 pr-2">
+                <Text className="text-[8px] font-black tracking-wider text-slate-400">STARTING FROM</Text>
+                <Text className="text-[18px] leading-[20px] font-black text-[#0d3b8f]" numberOfLines={1}>
+                  {`\u20B9${lowestPrice}`}
+                </Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mt-[-1px]">/ night</Text>
+              </View>
+
+              <TouchableOpacity className="h-8 min-w-[88px] rounded-[10px] bg-[#0d3b8f] px-3 flex-row items-center justify-center">
+                <Text className="text-[12px] font-black text-white">View</Text>
+                <Ionicons name="arrow-forward" size={10} color="#ffffff" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
     );
   };
-
   if (loading) {
     return (
       <View className="flex-1 bg-slate-50" style={{ paddingTop: topPadding }}>
@@ -607,35 +610,31 @@ const Hotels = ({ navigation, route }) => {
               {/* Amenities */}
               <View className="mt-8 mb-10">
                 <Text className="text-sm font-bold text-slate-900 mb-3">Amenities</Text>
-                <View className="flex-row flex-wrap gap-3">
-                  {[
-                    { label: 'Free Wifi', icon: 'wifi' },
-                    { label: 'AC', icon: 'air-conditioner' }, // material: hvac? using general for now
-                    { label: 'Pool', icon: 'pool' },
-                    { label: 'Breakfast', icon: 'coffee-outline', font: 'Ionicons' }, // custom logic for icon set
-                    { label: 'TV', icon: 'television' },
-                  ].map((item, idx) => {
-                    const isSelected = selectedAmenities.includes(item.label);
-                    return (
-                      <TouchableOpacity
-                        key={idx}
-                        onPress={() => toggleAmenity(item.label)}
-                        className={`w-[30%] py-4 rounded-xl border items-center justify-center ${
-                          isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
-                        }`}
-                      > 
-                        {item.font === 'Ionicons' ? (
-                           <Ionicons name={item.icon} size={20} color={isSelected ? '#2563eb' : '#64748b'} />
-                        ) : (
-                           <MaterialCommunityIcons name={item.icon} size={20} color={isSelected ? '#2563eb' : '#64748b'} />
-                        )}
-                        <Text className={`text-xs font-semibold mt-2 ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
-                          {item.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                {availableAmenities.length > 0 ? (
+                  <View className="flex-row flex-wrap gap-3">
+                    {availableAmenities.map((amenity, idx) => {
+                      const amenityLabel = getAmenityDisplayName(amenity);
+                      const amenityIcon = getAmenityIconName(amenityLabel);
+                      const isSelected = selectedAmenities.includes(amenityLabel);
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          onPress={() => toggleAmenity(amenityLabel)}
+                          className={`w-[30%] py-4 rounded-xl border items-center justify-center ${
+                            isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
+                          }`}
+                        > 
+                          <Ionicons name={amenityIcon} size={20} color={isSelected ? '#2563eb' : '#64748b'} />
+                          <Text className={`text-xs font-semibold mt-2 ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                            {amenityLabel}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text className="text-xs font-medium text-slate-500">No amenities data available.</Text>
+                )}
               </View>
 
             </ScrollView>
@@ -858,3 +857,4 @@ const Hotels = ({ navigation, route }) => {
 };
 
 export default Hotels;
+

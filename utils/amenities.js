@@ -239,3 +239,91 @@ export const getAmenityIconName = (name) => {
 };
 
 export const defaultAmenityIconName = DEFAULT_AMENITY_ICON;
+
+const splitAmenityText = (value) =>
+  String(value || "")
+    .split(/,|\||;/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const extractAmenityTokens = (value) => {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => extractAmenityTokens(item));
+  }
+
+  if (typeof value === "string") {
+    return splitAmenityText(value);
+  }
+
+  if (typeof value !== "object") return [];
+
+  const tokens = [];
+
+  const named = value?.name || value?.label || value?.title || value?.amenity;
+  if (typeof named === "string") {
+    tokens.push(...splitAmenityText(named));
+  }
+
+  const nestedArrays = [
+    value?.amenities,
+    value?.features,
+    value?.facilities,
+    value?.services,
+    value?.items,
+  ];
+  nestedArrays.forEach((entry) => {
+    tokens.push(...extractAmenityTokens(entry));
+  });
+
+  Object.entries(value).forEach(([key, flag]) => {
+    const isEnabled = flag === true || flag === 1 || flag === "true";
+    if (!isEnabled) return;
+    if (!amenityIconById[key]) return;
+
+    const byId = amenitiesList.find((item) => item.id === key);
+    if (byId?.name) {
+      tokens.push(byId.name);
+      return;
+    }
+    tokens.push(key);
+  });
+
+  return tokens;
+};
+
+export const extractHotelAmenities = (hotel) => {
+  const directSources = [
+    hotel?.amenities,
+    hotel?.basicInfo?.amenities,
+    hotel?.features,
+    hotel?.facilities,
+    hotel?.services,
+    hotel?.propertyAmenities,
+  ];
+
+  const roomLevelSources = Array.isArray(hotel?.rooms)
+    ? hotel.rooms.flatMap((room) => [room?.amenities, room?.features, room?.facilities, room?.services])
+    : [];
+
+  const rawAmenityList = [...directSources, ...roomLevelSources].flatMap((entry) =>
+    extractAmenityTokens(entry)
+  );
+
+  const normalizedSeen = new Set();
+  const finalAmenityList = [];
+
+  rawAmenityList.forEach((item) => {
+    const display = getAmenityDisplayName(item);
+    const normalized = normalizeAmenityName(display);
+    if (!normalized || normalizedSeen.has(normalized)) return;
+    normalizedSeen.add(normalized);
+    finalAmenityList.push(display);
+  });
+
+  return finalAmenityList;
+};
+
+export const getTopHotelAmenities = (hotel, limit = 3) =>
+  extractHotelAmenities(hotel).slice(0, Math.max(0, Number(limit) || 0));

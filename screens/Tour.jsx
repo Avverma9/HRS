@@ -11,8 +11,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useTheme } from "../contexts/ThemeContext";
 import {
   fetchTourList,
   filterToursByQuery,
@@ -56,7 +54,7 @@ const formatINR = (value) => {
       maximumFractionDigits: 0,
     }).format(amount);
   } catch {
-    return `₹${amount}`;
+    return `Rs ${amount}`;
   }
 };
 
@@ -65,11 +63,11 @@ function PrimaryButton({ title, onPress }) {
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.9}
-      className="h-10 rounded-xl px-3.5 bg-[#0b3b94] flex-row items-center justify-center"
-      style={{ gap: 5 }}
+      className="h-8 rounded-lg px-2.5 bg-[#0d3b8f] flex-row items-center justify-center"
+      style={{ gap: 4 }}
     >
-      <Text className="text-white font-extrabold text-[12px]">{title}</Text>
-      <Ionicons name="arrow-forward" size={12} color="#ffffff" />
+      <Text className="text-white font-extrabold text-[11px]">{title}</Text>
+      <Ionicons name="arrow-forward" size={10} color="#ffffff" />
     </TouchableOpacity>
   );
 }
@@ -81,110 +79,67 @@ function TourCard({ tour, onPressDetails }) {
   const places = getTourPlaces(tour) || "-";
   const city = tour?.city || "-";
   const agency = tour?.travelAgencyName || "-";
-  const nights = toNumber(tour?.nights);
-  const days = toNumber(tour?.days);
+  const nights = toNumber(tour?.nights) || 0;
+  const days = toNumber(tour?.days) || 0;
 
   const theme = splitCsvText(tour?.themes)[0] || "";
 
-  const amenities = Array.isArray(tour?.amenities)
-    ? tour.amenities.map((a) => String(a || "").trim()).filter(Boolean)
-    : splitCsvText(tour?.amenities);
+  const badgeText = theme || `${nights}N/${days}D`;
+  const mainImage = tour?.images?.[0] || "";
 
   return (
-    <View
-      className="mx-4 mb-4 bg-white rounded-[22px] border border-slate-200 overflow-hidden"
-      style={{
-        shadowColor: "#0f172a",
-        shadowOffset: { width: 0, height: 7 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 3,
-      }}
-    >
-      <View className="relative h-[158px] bg-slate-200">
-        {tour?.images?.[0] ? (
-          <Image source={{ uri: tour.images[0] }} className="w-full h-full" resizeMode="cover" />
-        ) : (
-          <View className="w-full h-full bg-slate-300" />
-        )}
+    <View className="mx-4 mb-2.5 bg-white rounded-xl border border-slate-200 p-2">
+      <View className="flex-row h-[120px]">
+        <View className="w-[98px] h-[120px] rounded-[10px] overflow-hidden bg-slate-200 relative">
+          {mainImage ? (
+            <Image source={{ uri: mainImage }} className="w-full h-full" resizeMode="cover" />
+          ) : (
+            <View className="w-full h-full bg-slate-300" />
+          )}
 
-        <View
-          className="absolute top-2.5 left-2.5 rounded-full px-2 py-1 flex-row items-center border border-white/70 bg-white/92"
-          style={{ gap: 4 }}
-        >
-          <Ionicons name="star" size={10} color="#f59e0b" />
-          <Text className="text-[11px] font-black text-slate-800">{rating.toFixed(1)}</Text>
-        </View>
-
-        <View
-          className="absolute top-2.5 right-2.5 rounded-full px-2 py-1 flex-row items-center border border-white/70 bg-white/92"
-          style={{ gap: 4 }}
-        >
-          <Ionicons name="moon" size={10} color="#0f429e" />
-          <Text className="text-[11px] font-black text-slate-800">{`${nights || 0}N / ${days || 0}D`}</Text>
-        </View>
-
-        <LinearGradient
-          colors={["rgba(15,23,42,0)", "rgba(15,23,42,0.2)", "rgba(15,23,42,0.74)"]}
-          locations={[0, 0.42, 1]}
-          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
-        />
-
-        <View className="absolute left-0 right-0 bottom-0 px-3.5 pb-3.5 pt-8">
-          <Text className="text-white text-[18px] leading-5 font-black" numberOfLines={2}>
-            {places}
-          </Text>
-          <View className="flex-row items-center mt-1" style={{ gap: 4 }}>
-            <Ionicons name="location-sharp" size={11} color="#f8fafc" />
-            <Text className="text-white/95 text-[12px] font-semibold" numberOfLines={1}>
-              {city}
-            </Text>
+          <View className="absolute top-1.5 left-1.5 rounded-full px-1.5 py-0.5 bg-white/90 border border-slate-200 flex-row items-center">
+            <Ionicons name="star" size={8} color="#f59e0b" />
+            <Text className="text-[9px] font-black text-slate-800 ml-1">{rating.toFixed(1)}</Text>
           </View>
         </View>
-      </View>
 
-      <View className="px-3.5 pt-3.5 pb-3.5">
-        <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
-          <View
-            className="flex-row items-center px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200"
-            style={{ gap: 5, maxWidth: "70%" }}
-          >
-            <Ionicons name="business" size={11} color="#334155" />
-            <Text className="text-[11px] font-extrabold text-slate-700" numberOfLines={1}>
-              {agency}
+        <View className="flex-1 ml-2.5 justify-between">
+          <View>
+            <Text className="text-[13px] leading-[16px] font-black text-slate-900" numberOfLines={2}>
+              {places}
             </Text>
-          </View>
 
-          {!!theme && (
-            <View className="px-2.5 py-1.5 rounded-full bg-blue-50 border border-blue-100">
-              <Text className="text-[10px] font-extrabold text-blue-700" numberOfLines={1}>
-                {theme}
+            <View className="flex-row items-center mt-0.5">
+              <Ionicons name="location-sharp" size={10} color="#334155" />
+              <Text className="text-[11px] font-semibold text-slate-600 ml-1" numberOfLines={1}>
+                {city}
               </Text>
             </View>
-          )}
-        </View>
 
-        {!!amenities.length && (
-          <View className="flex-row flex-wrap mt-2.5" style={{ gap: 6 }}>
-            {amenities.slice(0, 2).map((am, idx) => (
-              <View key={`${am}-${idx}`} className="px-2 py-1 rounded-full border border-slate-200 bg-white">
-                <Text className="text-[10px] text-slate-500">{am}</Text>
+            <View className="flex-row items-center mt-1">
+              <View className="px-1.5 py-0.5 rounded-full bg-slate-50 border border-slate-200">
+                <Text className="text-[9px] font-extrabold text-slate-600" numberOfLines={1}>
+                  {agency}
+                </Text>
               </View>
-            ))}
+              <View className="px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100 ml-1.5">
+                <Text className="text-[9px] font-extrabold text-[#0d3b8f]" numberOfLines={1}>
+                  {badgeText}
+                </Text>
+              </View>
+            </View>
           </View>
-        )}
 
-        <View className="h-px bg-slate-100 my-3.5" />
-
-        <View className="flex-row items-end justify-between" style={{ gap: 8 }}>
-          <View style={{ flex: 1 }}>
-            <Text className="text-[9px] font-black tracking-wider text-slate-400">STARTING FROM</Text>
-            <Text className="text-[20px] leading-6 font-black text-[#113d90]" numberOfLines={1}>
-              {formatINR(price)}
-              <Text className="text-[11px] font-semibold text-slate-500"> / person</Text>
-            </Text>
+          <View className="flex-row items-end justify-between mt-1">
+            <View className="flex-1 pr-1.5">
+              <Text className="text-[8px] font-black tracking-wider text-slate-400">STARTING FROM</Text>
+              <Text className="text-[18px] leading-[20px] font-black text-[#0d3b8f]" numberOfLines={1}>
+                {formatINR(price)}
+              </Text>
+              <Text className="text-[10px] font-semibold text-slate-500 mt-[-1px]">/ person</Text>
+            </View>
+            <PrimaryButton title="View details" onPress={onPressDetails} />
           </View>
-          <PrimaryButton title="View details" onPress={onPressDetails} />
         </View>
       </View>
     </View>
@@ -194,7 +149,6 @@ function TourCard({ tour, onPressDetails }) {
 export default function Tour() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
-  const { isDark } = useTheme();
   const tourState = useSelector((state) => state.tour);
 
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -349,108 +303,105 @@ export default function Tour() {
     navigation.navigate("TourDetails", { tourId });
   };
 
-  const headerBg = isDark ? "bg-slate-950" : "bg-slate-100";
-  const titleColor = isDark ? "text-white" : "text-slate-900";
-
   return (
-    <SafeAreaView className={`flex-1 ${headerBg}`}>
+    <SafeAreaView className="flex-1 bg-[#0d3b8f]">
       <ScrollView
-        className="flex-1"
+        className="flex-1 bg-slate-100"
         contentContainerStyle={{ paddingBottom: 24 }}
         stickyHeaderIndices={[0]}
       >
-        <View className={`px-4 pt-2 pb-3 ${headerBg} z-20`}>
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center" style={{ gap: 10 }}>
+        <View className="pt-2 pb-3 bg-[#0d3b8f] rounded-b-[28px] z-20">
+          <View className="mx-3 bg-[#e8f0ff] rounded-2xl border border-[#c7d8f7] px-3 py-2">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center " style={{ gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => navigation.goBack()}
+                  activeOpacity={0.9}
+                  className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center"
+                >
+                  <Ionicons name="arrow-back" size={18} color="#0f172a" />
+                </TouchableOpacity>
+                <View > 
+                  <Text className="text-[17px]  font-black text-slate-900">Explore Tours</Text>
+                  <Text className="text-[12px] mt-0.5 text-slate-600">Compact search | better filters</Text>
+                </View>
+              </View>
+
               <TouchableOpacity
-                onPress={() => navigation.goBack()}
+                onPress={() => setShowFilterModal(true)}
                 activeOpacity={0.9}
-                className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center"
+                className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center relative"
               >
-                <Ionicons name="arrow-back" size={18} color="#0f172a" />
+                <Ionicons name="options-outline" size={18} color="#0f172a" />
+                {activeFilterCount > 0 && (
+                  <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0d3b8f] border border-white items-center justify-center">
+                    <Text className="text-white text-[10px] font-black">
+                      {activeFilterCount > 99 ? "99+" : activeFilterCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
-              <View>
-                <Text className={`text-[17px] font-black ${titleColor}`}>Explore Tours</Text>
-                <Text className={`${isDark ? "text-slate-300" : "text-slate-600"} text-[12px] mt-0.5`}>
-                  Compact search • better filters
-                </Text>
+            </View>
+
+            {/* FROM / TO (compact) */}
+            <View className="mt-3 flex-row" style={{ gap: 10 }}>
+              <View className="flex-1 h-11 rounded-2xl bg-[#e8f0ff] border border-[#c7d8f7] px-3 flex-row items-center" style={{ gap: 8 }}>
+                <Ionicons name="radio-button-on" size={14} color="#10b981" />
+                <TextInput
+                  value={fromCity}
+                  onChangeText={setFromCity}
+                  placeholder="From"
+                  placeholderTextColor="#94a3b8"
+                  className="flex-1 text-slate-800 font-semibold"
+                  autoCorrect={false}
+                />
+              </View>
+              <View className="flex-1 h-11 rounded-2xl bg-[#e8f0ff] border border-[#c7d8f7] px-3 flex-row items-center" style={{ gap: 8 }}>
+                <Ionicons name="location" size={14} color="#3b82f6" />
+                <TextInput
+                  value={toCity}
+                  onChangeText={setToCity}
+                  placeholder="To"
+                  placeholderTextColor="#94a3b8"
+                  className="flex-1 text-slate-800 font-semibold"
+                  autoCorrect={false}
+                />
               </View>
             </View>
 
-            <TouchableOpacity
-              onPress={() => setShowFilterModal(true)}
-              activeOpacity={0.9}
-              className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center relative"
-            >
-              <Ionicons name="options-outline" size={18} color="#0f172a" />
-              {activeFilterCount > 0 && (
-                <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0d3b8f] border border-white items-center justify-center">
-                  <Text className="text-white text-[10px] font-black">
-                    {activeFilterCount > 99 ? "99+" : activeFilterCount}
-                  </Text>
-                </View>
+            {/* Search */}
+            <View className="mt-3 h-11 rounded-2xl bg-[#e8f0ff] border border-[#c7d8f7] px-3 flex-row items-center">
+              <Ionicons name="search" size={16} color="#64748b" />
+              <TextInput
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder="Search packages, agency, city..."
+                placeholderTextColor="#94a3b8"
+                className="flex-1 ml-2 text-slate-800 font-semibold"
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {!!searchText && (
+                <TouchableOpacity onPress={() => setSearchText("")} className="p-2">
+                  <Ionicons name="close-circle" size={18} color="#94a3b8" />
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
-          </View>
-
-          {/* FROM / TO (compact) */}
-          <View className="mt-3 flex-row" style={{ gap: 10 }}>
-            <View className="flex-1 h-11 rounded-2xl bg-white border border-slate-200 px-3 flex-row items-center" style={{ gap: 8 }}>
-              <Ionicons name="radio-button-on" size={14} color="#10b981" />
-              <TextInput
-                value={fromCity}
-                onChangeText={setFromCity}
-                placeholder="From"
-                placeholderTextColor="#94a3b8"
-                className="flex-1 text-slate-800 font-semibold"
-                autoCorrect={false}
-              />
             </View>
-            <View className="flex-1 h-11 rounded-2xl bg-white border border-slate-200 px-3 flex-row items-center" style={{ gap: 8 }}>
-              <Ionicons name="location" size={14} color="#3b82f6" />
-              <TextInput
-                value={toCity}
-                onChangeText={setToCity}
-                placeholder="To"
-                placeholderTextColor="#94a3b8"
-                className="flex-1 text-slate-800 font-semibold"
-                autoCorrect={false}
-              />
-            </View>
-          </View>
 
-          {/* Search */}
-          <View className="mt-3 h-11 rounded-2xl bg-white border border-slate-200 px-3 flex-row items-center">
-            <Ionicons name="search" size={16} color="#64748b" />
-            <TextInput
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search packages, agency, city..."
-              placeholderTextColor="#94a3b8"
-              className="flex-1 ml-2 text-slate-800 font-semibold"
-              autoCorrect={false}
-              returnKeyType="search"
-            />
-            {!!searchText && (
-              <TouchableOpacity onPress={() => setSearchText("")} className="p-2">
-                <Ionicons name="close-circle" size={18} color="#94a3b8" />
-              </TouchableOpacity>
+            {!!(selectedThemes.length || tourSelectedAmenities.length || tourMinRating || tourPriceRange[0] !== 0 || fromCity || toCity || searchText) && (
+              <View className="mt-3 flex-row flex-wrap items-center" style={{ gap: 8 }}>
+                <View className="px-3 py-1.5 rounded-full bg-slate-900">
+                  <Text className="text-[12px] font-extrabold text-white">{filteredTours.length} results</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={handleClearAllFilters}  
+                  className="px-3 py-1.5 rounded-full bg-white border border-slate-200"
+                >
+                  <Text className="text-[12px] font-extrabold text-slate-600">Clear</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
-
-          {!!(selectedThemes.length || tourSelectedAmenities.length || tourMinRating || tourPriceRange[0] !== 0 || fromCity || toCity || searchText) && (
-            <View className="mt-3 flex-row flex-wrap items-center" style={{ gap: 8 }}>
-              <View className="px-3 py-1.5 rounded-full bg-slate-900">
-                <Text className="text-[12px] font-extrabold text-white">{filteredTours.length} results</Text>
-              </View>
-              <TouchableOpacity
-                onPress={handleClearAllFilters}
-                className="px-3 py-1.5 rounded-full bg-white border border-slate-200"
-              >
-                <Text className="text-[12px] font-extrabold text-slate-600">Clear</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
         {isLoading && (
@@ -656,9 +607,11 @@ export default function Tour() {
             </View>
           </View>
         </View>
-      </Modal>
+      </Modal>
+
     </SafeAreaView>
   );
 }
+
 
 

@@ -10,7 +10,6 @@ import {
   Platform,
   Modal,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Dimensions,
 } from "react-native";
@@ -30,6 +29,7 @@ import {
 import { getUserId } from "../utils/credentials";
 import { getAmenityDisplayName, getAmenityIconName } from "../utils/amenities";
 import HotelDetailsSkeleton from "../components/skeleton/HotelDetailsSkeleton";
+import { useAppModal } from "../contexts/AppModalContext";
 
 /**
  * ✅ What this version fixes/does:
@@ -62,6 +62,17 @@ const parseNumber = (v) => {
     return Number.isFinite(n) ? n : 0;
   }
   return 0;
+};
+
+const normalizeBool = (value) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "yes" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "no" || normalized === "0") return false;
+  }
+  return null;
 };
 
 const toList = (value) => {
@@ -187,6 +198,7 @@ const SectionTitle = ({ title, right }) => (
 
 const HotelDetails = ({ navigation, route }) => {
   const dispatch = useDispatch();
+  const { showError, showSuccess } = useAppModal();
 
   const {
     hotelId,
@@ -266,30 +278,70 @@ const HotelDetails = ({ navigation, route }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const getRoomId = useCallback((room) => room?.id ?? room?._id ?? room?.roomId ?? null, []);
-  const getAvailableCount = useCallback((room) => {
-    return parseNumber(
-      room?.inventory?.available ??
-        room?.inventory?.availableCount ??
-        room?.inventory?.roomsLeft ??
-        room?.inventory?.count ??
-        room?.countRooms ??
-        room?.availableRooms
-    );
-  }, []);
-  const isRoomSoldOut = useCallback(
-    (room) => {
-      if (typeof room?.inventory?.isSoldOut === "boolean") return room.inventory.isSoldOut;
-      const availableCount = getAvailableCount(room);
-      if (availableCount > 0) return false;
+  const getRoomId = useCallback(
+    (room) =>
+      room?.id ??
+      room?._id ??
+      room?.roomId ??
+      room?.roomID ??
+      room?.hotelRoomId ??
+      room?.typeId ??
+      room?.roomTypeID ??
+      room?.room_type_id ??
+      room?.roomTypeId ??
+      room?.roomType?._id ??
+      room?.roomType?.id ??
+      null,
+    []
+  );
 
-      const knownTotal = parseNumber(room?.countRooms ?? room?.inventory?.total);
-      if (knownTotal === 0 && (room?.countRooms !== undefined || room?.inventory?.total !== undefined)) {
-        return true;
-      }
-      return false;
-    },
-    [getAvailableCount]
+  const getRoomAvailabilityMeta = useCallback((room) => {
+    const availabilityCandidates = [
+      room?.inventory?.available,
+      room?.inventory?.availableCount,
+      room?.inventory?.roomsLeft,
+      room?.inventory?.availableRooms,
+      room?.availableRooms,
+      room?.roomsLeft,
+      room?.remainingRooms,
+      room?.available,
+      room?.availability?.available,
+      room?.availabilityCount,
+    ];
+
+    const rawAvailable = availabilityCandidates.find(
+      (value) => value !== undefined && value !== null && String(value).trim() !== ""
+    );
+    const hasExplicitAvailable = rawAvailable !== undefined;
+    const availableCount = hasExplicitAvailable ? parseNumber(rawAvailable) : 0;
+
+    const soldOutFlag =
+      normalizeBool(room?.inventory?.isSoldOut) ??
+      normalizeBool(room?.isSoldOut) ??
+      normalizeBool(room?.soldOut);
+
+    const statusText = String(
+      room?.inventory?.status || room?.status || room?.availabilityStatus || ""
+    )
+      .trim()
+      .toLowerCase();
+    const statusSaysSoldOut =
+      statusText.includes("sold") ||
+      statusText.includes("unavailable") ||
+      statusText.includes("full");
+
+    const soldOut = hasExplicitAvailable
+      ? availableCount <= 0
+      : soldOutFlag !== null
+      ? soldOutFlag
+      : statusSaysSoldOut;
+
+    return { soldOut, availableCount, hasExplicitAvailable };
+  }, []);
+
+  const isRoomSoldOut = useCallback(
+    (room) => getRoomAvailabilityMeta(room).soldOut,
+    [getRoomAvailabilityMeta]
   );
 
   // ✅ Monthly override picker (your monthlyData sample supported)
@@ -612,15 +664,18 @@ const HotelDetails = ({ navigation, route }) => {
     if (bookingStatus === "succeeded") {
       setBookingModalVisible(false);
       dispatch(resetBookingState());
-      Alert.alert("Success", "Booking Request Sent Successfully!", [
-        { text: "OK", onPress: () => navigation.navigate("Home") },
-      ]);
+      showSuccess("Success", "Booking Request Sent Successfully!", {
+        onPrimary: () => navigation.navigate("Home"),
+      });
     }
     if (bookingStatus === "failed") {
-      Alert.alert("Booking Failed", bookingError || "Something went wrong.");
+      showError(
+        "Booking Failed",
+        String(bookingError?.message || bookingError || "Something went wrong.")
+      );
       dispatch(resetBookingState());
     }
-  }, [bookingStatus, bookingError, dispatch, navigation]);
+  }, [bookingStatus, bookingError, dispatch, navigation, showError, showSuccess]);
 
   // Tab bar hidden via Tab Navigator options (App.js)
 
@@ -736,19 +791,19 @@ const HotelDetails = ({ navigation, route }) => {
     const email = String(guestEmail || "").trim();
 
     if (!name || !phone || !email) {
-      Alert.alert("Missing Details", "Please fill all guest details.");
+      showError("Missing Details", "Please fill all guest details.");
       return;
     }
     if (!validateEmail(email)) {
-      Alert.alert("Invalid Email", "Please enter a valid email address.");
+      showError("Invalid Email", "Please enter a valid email address.");
       return;
     }
     if (!selectedRoomId) {
-      Alert.alert("Select Room", "Please select a room first.");
+      showError("Select Room", "Please select a room first.");
       return;
     }
     if (guestsCount > roomsCount * MAX_GUESTS_PER_ROOM) {
-      Alert.alert(
+      showError(
         "Guest Limit Exceeded",
         `Only ${MAX_GUESTS_PER_ROOM} guests are allowed per room.`
       );
@@ -757,7 +812,7 @@ const HotelDetails = ({ navigation, route }) => {
 
     const userId = await getUserId();
     if (!userId) {
-      Alert.alert("Login Required", "Please login to continue booking.");
+      showError("Login Required", "Please login to continue booking.");
       return;
     }
 
@@ -1197,7 +1252,8 @@ const HotelDetails = ({ navigation, route }) => {
             {roomsWithPricing.map((room, idx) => {
               const roomId = getRoomId(room);
               const isSelected = String(selectedRoomId) === String(roomId);
-              const soldOut = isRoomSoldOut(room);
+              const availabilityMeta = getRoomAvailabilityMeta(room);
+              const soldOut = availabilityMeta.soldOut;
 
               const nightlyPrice = room.__pricing?.nightlyPrice ?? getRoomBasePrice(room);
               const roomTaxPercent = parseNumber(
@@ -1211,10 +1267,10 @@ const HotelDetails = ({ navigation, route }) => {
                 ? `${pricing.appliedTaxPercent}%`
                 : "12%";
 
-              const availableCount = getAvailableCount(room);
+              const availableCount = availabilityMeta.availableCount;
               const availabilityText = soldOut
                 ? "Sold Out"
-                : availableCount > 0
+                : availabilityMeta.hasExplicitAvailable
                 ? `${availableCount} available`
                 : "Available";
 

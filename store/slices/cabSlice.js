@@ -8,6 +8,83 @@ const normalizeCabList = (payload) => {
   return [];
 };
 
+const normalizeCabItem = (payload) => {
+  if (!payload) return null;
+  if (payload?._id) return payload;
+  if (payload?.data?._id) return payload.data;
+  if (payload?.car?._id) return payload.car;
+  if (Array.isArray(payload?.data) && payload.data[0]?._id) return payload.data[0];
+  if (Array.isArray(payload) && payload[0]?._id) return payload[0];
+  return null;
+};
+
+const sanitizeCabFilterParams = (params = {}) =>
+  Object.entries(params).reduce((acc, [key, value]) => {
+    if (value === undefined || value === null) return acc;
+
+    if (typeof value === "string") {
+      const normalized = value.trim();
+      if (!normalized) return acc;
+      acc[key] = normalized;
+      return acc;
+    }
+
+    acc[key] = value;
+    return acc;
+  }, {});
+
+const normalizeSeatsPayload = (seats) => {
+  if (Array.isArray(seats)) {
+    const normalized = seats
+      .map((seat) => {
+        if (typeof seat === "number") return Number.isFinite(seat) ? String(seat) : null;
+        const text = String(seat || "").trim();
+        if (!text) return null;
+        return text;
+      })
+      .filter((seat) => seat !== null);
+
+    return normalized;
+  }
+
+  if (typeof seats === "number") {
+    return Number.isFinite(seats) ? [String(seats)] : [];
+  }
+
+  const stringValue = String(seats || "").trim();
+  if (!stringValue) return [];
+
+  return [stringValue];
+};
+
+const sanitizeCabBookingPayload = (payload = {}) => {
+  const sharingType = String(payload?.sharingType || "").trim();
+  const safePrice = Number(payload?.price);
+  const safeGstPrice = Number(payload?.gstPrice);
+  const bookingPayload = {
+    sharingType,
+    vehicleType: String(payload?.vehicleType || "").trim(),
+    carId: String(payload?.carId || "").trim(),
+    bookedBy: String(payload?.bookedBy || "").trim(),
+    customerMobile: String(payload?.customerMobile || "").trim(),
+    customerEmail: String(payload?.customerEmail || "").trim(),
+    bookingStatus: String(payload?.bookingStatus || "Pending").trim(),
+    vehicleNumber: String(payload?.vehicleNumber || "").trim(),
+    pickupP: String(payload?.pickupP || "").trim(),
+    dropP: String(payload?.dropP || "").trim(),
+    pickupD: payload?.pickupD || null,
+    dropD: payload?.dropD || null,
+    price: Number.isFinite(safePrice) ? safePrice : 0,
+    gstPrice: Number.isFinite(safeGstPrice) ? safeGstPrice : 0,
+  };
+
+  if (payload?.seats !== undefined) {
+    bookingPayload.seats = normalizeSeatsPayload(payload?.seats);
+  }
+
+  return bookingPayload;
+};
+
 export const fetchAllCabs = createAsyncThunk(
   "cab/fetchAllCabs",
   async (_, { rejectWithValue }) => {
@@ -25,6 +102,104 @@ export const fetchAllCabs = createAsyncThunk(
   }
 );
 
+export const filterCabsByQuery = createAsyncThunk(
+  "cab/filterCabsByQuery",
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const queryParams = sanitizeCabFilterParams(params);
+      const response = await api.get("/travel/filter-car/by-query", {
+        params: queryParams,
+      });
+      return {
+        items: normalizeCabList(response?.data),
+        message: response?.data?.message || null,
+      };
+    } catch (error) {
+      return rejectWithValue(
+        error?.response?.data || { message: error?.message || "Unable to filter cabs" }
+      );
+    }
+  }
+);
+
+export const fetchCabById = createAsyncThunk(
+  "cab/fetchCabById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const cabId = String(id || "").trim();
+      if (!cabId) {
+        return rejectWithValue({ message: "Cab id is required." });
+      }
+
+      const response = await api.get(`/travel/get-a-car/${cabId}`);
+      const cab = normalizeCabItem(response?.data);
+
+      if (!cab) {
+        return rejectWithValue({ message: "Cab details not found." });
+      }
+
+      return {
+        cab,
+        message: response?.data?.message || null,
+      };
+    } catch (error) {
+      return rejectWithValue(
+        error?.response?.data || { message: error?.message || "Unable to fetch cab details" }
+      );
+    }
+  }
+);
+
+export const createCabBooking = createAsyncThunk(
+  "cab/createCabBooking",
+  async (payload = {}, { rejectWithValue }) => {
+    try {
+      const bookingPayload = sanitizeCabBookingPayload(payload);
+
+      if (!bookingPayload.carId) {
+        return rejectWithValue({ message: "Car id is required." });
+      }
+      if (!bookingPayload.bookedBy) {
+        return rejectWithValue({ message: "Booked by is required." });
+      }
+      if (!bookingPayload.customerMobile) {
+        return rejectWithValue({ message: "Customer mobile is required." });
+      }
+      if (!bookingPayload.customerEmail) {
+        return rejectWithValue({ message: "Customer email is required." });
+      }
+      if (!bookingPayload.vehicleNumber) {
+        return rejectWithValue({ message: "Vehicle number is required." });
+      }
+      if (!bookingPayload.pickupP) {
+        return rejectWithValue({ message: "Pickup location is required." });
+      }
+      if (!bookingPayload.dropP) {
+        return rejectWithValue({ message: "Drop location is required." });
+      }
+      if (!bookingPayload.pickupD) {
+        return rejectWithValue({ message: "Pickup date is required." });
+      }
+      if (!bookingPayload.dropD) {
+        return rejectWithValue({ message: "Drop date is required." });
+      }
+      if (
+        String(bookingPayload.sharingType || "").toLowerCase() === "shared" &&
+        (!Array.isArray(bookingPayload.seats) || bookingPayload.seats.length === 0)
+      ) {
+        return rejectWithValue({ message: "Seat id(s) required for shared booking." });
+      }
+
+      const response = await api.post("/travel//create-travel/booking", bookingPayload);
+      return response?.data || {};
+    } catch (error) {
+      return rejectWithValue(
+        error?.response?.data || { message: error?.message || "Unable to create cab booking" }
+      );
+    }
+  }
+);
+
 const cabSlice = createSlice({
   name: "cab",
   initialState: {
@@ -32,6 +207,12 @@ const cabSlice = createSlice({
     status: "idle",
     error: null,
     message: null,
+    selectedCab: null,
+    selectedCabStatus: "idle",
+    selectedCabError: null,
+    cabBookingStatus: "idle",
+    cabBookingError: null,
+    cabBookingData: null,
   },
   reducers: {
     resetCabState: (state) => {
@@ -39,7 +220,23 @@ const cabSlice = createSlice({
       state.status = "idle";
       state.error = null;
       state.message = null;
+      state.selectedCab = null;
+      state.selectedCabStatus = "idle";
+      state.selectedCabError = null;
+      state.cabBookingStatus = "idle";
+      state.cabBookingError = null;
+      state.cabBookingData = null;
     },
+    resetSelectedCab: (state) => {
+      state.selectedCab = null;
+      state.selectedCabStatus = "idle";
+      state.selectedCabError = null;
+    },
+    resetCabBookingState: (state) => {
+      state.cabBookingStatus = "idle";
+      state.cabBookingError = null;
+      state.cabBookingData = null;
+    }
   },
   extraReducers: (builder) => {
     builder
@@ -56,9 +253,48 @@ const cabSlice = createSlice({
         state.status = "failed";
         state.error = action.payload || { message: "Failed to fetch cabs" };
         state.items = [];
+      })
+      .addCase(filterCabsByQuery.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(filterCabsByQuery.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.items = Array.isArray(action.payload?.items) ? action.payload.items : [];
+        state.message = action.payload?.message || null;
+      })
+      .addCase(filterCabsByQuery.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload || { message: "Failed to filter cabs" };
+        state.items = [];
+      })
+      .addCase(fetchCabById.pending, (state) => {
+        state.selectedCabStatus = "loading";
+        state.selectedCabError = null;
+      })
+      .addCase(fetchCabById.fulfilled, (state, action) => {
+        state.selectedCabStatus = "succeeded";
+        state.selectedCab = action.payload?.cab || null;
+      })
+      .addCase(fetchCabById.rejected, (state, action) => {
+        state.selectedCabStatus = "failed";
+        state.selectedCabError = action.payload || { message: "Failed to fetch cab details" };
+        state.selectedCab = null;
+      })
+      .addCase(createCabBooking.pending, (state) => {
+        state.cabBookingStatus = "loading";
+        state.cabBookingError = null;
+      })
+      .addCase(createCabBooking.fulfilled, (state, action) => {
+        state.cabBookingStatus = "succeeded";
+        state.cabBookingData = action.payload || null;
+      })
+      .addCase(createCabBooking.rejected, (state, action) => {
+        state.cabBookingStatus = "failed";
+        state.cabBookingError = action.payload || { message: "Failed to create cab booking" };
       });
   },
 });
 
-export const { resetCabState } = cabSlice.actions;
+export const { resetCabState, resetSelectedCab, resetCabBookingState } = cabSlice.actions;
 export default cabSlice.reducer;
