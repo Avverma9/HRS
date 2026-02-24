@@ -277,11 +277,15 @@ const Hotels = ({ navigation, route }) => {
       : 2499;
     const hotelId = hotel.hotelId || hotel._id;
     const mainImage = hotel.images?.[0] || null;
+    const openHotelDetails = () => {
+      if (!hotelId) return;
+      navigation.navigate("HotelDetails", { hotelId });
+    };
 
     return (
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => navigation.navigate("HotelDetails", { hotelId })}
+        onPress={openHotelDetails}
         className="mx-4 mb-2.5 bg-white rounded-xl border border-slate-200 p-2"
       >
         <View className="flex-row h-[120px]">
@@ -336,7 +340,11 @@ const Hotels = ({ navigation, route }) => {
                 <Text className="text-[10px] font-semibold text-slate-500 mt-[-1px]">/ night</Text>
               </View>
 
-              <TouchableOpacity className="h-8 min-w-[88px] rounded-[10px] bg-[#0d3b8f] px-3 flex-row items-center justify-center">
+              <TouchableOpacity
+                onPress={openHotelDetails}
+                activeOpacity={0.9}
+                className="h-8 min-w-[88px] rounded-[10px] bg-[#0d3b8f] px-3 flex-row items-center justify-center"
+              >
                 <Text className="text-[12px] font-black text-white">View</Text>
                 <Ionicons name="arrow-forward" size={10} color="#ffffff" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
@@ -857,4 +865,3 @@ const Hotels = ({ navigation, route }) => {
 };
 
 export default Hotels;
-
