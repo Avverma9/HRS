@@ -103,27 +103,38 @@ function TourCard({ tour, onPressDetails }) {
           </View>
         </View>
 
-        <View className="flex-1 ml-2.5 justify-between">
+        <View className="flex-1 ml-2.5 justify-between" style={{ minWidth: 0 }}>
           <View>
-            <Text className="text-[13px] leading-[16px] font-black text-slate-900" numberOfLines={2}>
+            <Text className="text-[13px] leading-[16px] font-black text-slate-900" numberOfLines={2} ellipsizeMode="tail">
               {places}
             </Text>
 
-            <View className="flex-row items-center mt-0.5">
+            <View className="flex-row items-center mt-0.5" style={{ minWidth: 0 }}>
               <Ionicons name="location-sharp" size={10} color="#334155" />
-              <Text className="text-[11px] font-semibold text-slate-600 ml-1" numberOfLines={1}>
+              <Text
+                className="text-[11px] font-semibold text-slate-600 ml-1"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={{ flexShrink: 1 }}
+              >
                 {city}
               </Text>
             </View>
 
-            <View className="flex-row items-center mt-1">
-              <View className="px-1.5 py-0.5 rounded-full bg-slate-50 border border-slate-200">
-                <Text className="text-[9px] font-extrabold text-slate-600" numberOfLines={1}>
+            <View className="flex-row items-center mt-1" style={{ minWidth: 0, gap: 6 }}>
+              <View
+                className="px-1.5 py-0.5 rounded-full bg-slate-50 border border-slate-200"
+                style={{ maxWidth: "62%", flexShrink: 1 }}
+              >
+                <Text className="text-[9px] font-extrabold text-slate-600" numberOfLines={1} ellipsizeMode="tail">
                   {agency}
                 </Text>
               </View>
-              <View className="px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100 ml-1.5">
-                <Text className="text-[9px] font-extrabold text-[#0d3b8f]" numberOfLines={1}>
+              <View
+                className="px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100"
+                style={{ maxWidth: "36%", flexShrink: 1 }}
+              >
+                <Text className="text-[9px] font-extrabold text-[#0d3b8f]" numberOfLines={1} ellipsizeMode="tail">
                   {badgeText}
                 </Text>
               </View>
@@ -459,7 +470,7 @@ export default function Tour() {
 
             <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
               <Text className="text-[13px] font-black text-slate-900 mb-3">Price Range</Text>
-              <View className="flex-row" style={{ gap: 10 }}>
+              <View className="flex-row flex-wrap" style={{ gap: 10 }}>
                 {[0, 5000, 15000].map((start) => {
                   const end = start === 0 ? 5000 : start === 5000 ? 15000 : 50000;
                   const label = start === 15000 ? "₹15000+" : `₹${start} - ₹${end}`;
@@ -470,8 +481,11 @@ export default function Tour() {
                       onPress={() => setTourPriceRange([start, end])}
                       activeOpacity={0.9}
                       className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                      style={{ maxWidth: "100%" }}
                     >
-                      <Text className={`text-[12px] font-extrabold ${isSelected ? "text-blue-700" : "text-slate-600"}`}>{label}</Text>
+                      <Text className={`text-[12px] font-extrabold ${isSelected ? "text-blue-700" : "text-slate-600"}`} numberOfLines={1}>
+                        {label}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -501,7 +515,7 @@ export default function Tour() {
 
               <View className="mt-6">
                 <Text className="text-[13px] font-black text-slate-900 mb-3">Sort By Order</Text>
-                <View className="flex-row" style={{ gap: 10 }}>
+                <View className="flex-row flex-wrap" style={{ gap: 10 }}>
                   {[
                     { id: "default", label: "Default" },
                     { id: "asc", label: "A-Z" },
@@ -514,8 +528,9 @@ export default function Tour() {
                         onPress={() => setSortOrderFilter(item.id)}
                         activeOpacity={0.9}
                         className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                        style={{ maxWidth: "100%" }}
                       >
-                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-600"}`}>
+                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-600"}`} numberOfLines={1}>
                           {item.label}
                         </Text>
                       </TouchableOpacity>
@@ -526,7 +541,7 @@ export default function Tour() {
 
               <View className="mt-6">
                 <Text className="text-[13px] font-black text-slate-900 mb-3">Sort By Duration</Text>
-                <View className="flex-row" style={{ gap: 10 }}>
+                <View className="flex-row flex-wrap" style={{ gap: 10 }}>
                   {[
                     { id: "default", label: "Default" },
                     { id: "asc", label: "Short first" },
@@ -539,8 +554,9 @@ export default function Tour() {
                         onPress={() => setDurationSortFilter(item.id)}
                         activeOpacity={0.9}
                         className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                        style={{ maxWidth: "100%" }}
                       >
-                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-600"}`}>
+                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-600"}`} numberOfLines={1}>
                           {item.label}
                         </Text>
                       </TouchableOpacity>
@@ -560,8 +576,16 @@ export default function Tour() {
                         onPress={() => toggleTheme(theme)}
                         activeOpacity={0.9}
                         className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                        style={{ maxWidth: "100%" }}
                       >
-                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-500"}`}>{theme}</Text>
+                        <Text
+                          className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-500"}`}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          style={{ maxWidth: 220 }}
+                        >
+                          {theme}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -579,8 +603,16 @@ export default function Tour() {
                         onPress={() => toggleAmenity(amenity)}
                         activeOpacity={0.9}
                         className={`px-3 py-2 border rounded-xl ${isSelected ? "bg-blue-50 border-blue-500" : "border-slate-200"}`}
+                        style={{ maxWidth: "100%" }}
                       >
-                        <Text className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-500"}`}>{amenity}</Text>
+                        <Text
+                          className={`text-[12px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-500"}`}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          style={{ maxWidth: 220 }}
+                        >
+                          {amenity}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -612,6 +644,4 @@ export default function Tour() {
     </SafeAreaView>
   );
 }
-
-
 
