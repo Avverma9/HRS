@@ -9,12 +9,15 @@ const readFirstAvailable = async (keys, reader) => {
   return null;
 };
 
+const sanitizeUserId = (value) => String(value || "").trim().replace(/[<>\s]/g, "");
+
 export const getUserId = async () => {
   const secureValue = await readFirstAvailable(["userId", "rsUserId"], (key) =>
     SecureStore.getItemAsync(key)
   );
-  if (secureValue) return secureValue;
-  return readFirstAvailable(["userId", "rsUserId"], (key) => AsyncStorage.getItem(key));
+  if (secureValue) return sanitizeUserId(secureValue);
+  const asyncValue = await readFirstAvailable(["userId", "rsUserId"], (key) => AsyncStorage.getItem(key));
+  return sanitizeUserId(asyncValue);
 };
 
 export const getUserEmail = async () => {
@@ -31,7 +34,7 @@ export const getToken = async () => {
 
 export const saveAuthSession = async ({ token, userId, email }) => {
   const safeToken = token ? String(token) : "";
-  const safeUserId = userId ? String(userId) : "";
+  const safeUserId = sanitizeUserId(userId);
   const safeEmail = email ? String(email) : "";
 
   const tasks = [];

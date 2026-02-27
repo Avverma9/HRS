@@ -29,6 +29,17 @@ const safeNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const getCabId = (cab) =>
+  String(
+    cab?._id ??
+      cab?.carId ??
+      cab?.id ??
+      cab?.cabId ??
+      cab?.carID ??
+      cab?.cabID ??
+      ""
+  ).trim();
+
 const formatDateTime = (value) => {
   if (!value) return "-";
   const date = new Date(value);
@@ -138,6 +149,7 @@ export default function CabDetails({ navigation, route }) {
   const dispatch = useDispatch();
   const { showError, showInfo, showSuccess } = useAppModal();
   const { cabId, cab: previewCab } = route?.params || {};
+  const requestedCabId = String(cabId || getCabId(previewCab) || "").trim();
   const {
     selectedCab,
     selectedCabStatus,
@@ -152,16 +164,17 @@ export default function CabDetails({ navigation, route }) {
   const [selectedSeatIds, setSelectedSeatIds] = useState([]);
 
   useEffect(() => {
-    if (cabId) {
-      dispatch(fetchCabById(cabId));
+    if (requestedCabId) {
+      dispatch(fetchCabById(requestedCabId));
     }
     return () => {
       dispatch(resetSelectedCab());
       dispatch(resetCabBookingState());
     };
-  }, [dispatch, cabId]);
+  }, [dispatch, requestedCabId]);
 
   const cab = selectedCab || previewCab || null;
+  const resolvedCabId = getCabId(cab) || requestedCabId;
   const seatStats = useMemo(() => getSeatStats(cab), [cab]);
   const isShared = String(cab?.sharingType || "").toLowerCase() === "shared";
   const totalFare = isShared ? safeNumber(cab?.perPersonCost, 0) : safeNumber(cab?.price, 0);
@@ -224,7 +237,7 @@ export default function CabDetails({ navigation, route }) {
 
   const submitCabBooking = async () => {
     if (isBookingSubmitting) return;
-    if (!cab?._id) {
+    if (!resolvedCabId) {
       showError("Cab Not Found", "Unable to identify the selected cab.");
       return;
     }
@@ -287,7 +300,7 @@ export default function CabDetails({ navigation, route }) {
       userId: String(loggedInUserId),
       sharingType: String(cab?.sharingType || "Private"),
       vehicleType: String(cab?.vehicleType || "Car"),
-      carId: String(cab?._id),
+      carId: resolvedCabId,
       bookedBy: passengerName,
       customerMobile: mobile,
       customerEmail: email,
@@ -311,7 +324,9 @@ export default function CabDetails({ navigation, route }) {
       setBookingModalVisible(false);
       resetFormState();
       dispatch(resetCabBookingState());
-      dispatch(fetchCabById(cab?._id));
+      if (resolvedCabId) {
+        dispatch(fetchCabById(resolvedCabId));
+      }
       dispatch(fetchAllCabs());
 
       showSuccess(
@@ -347,8 +362,8 @@ export default function CabDetails({ navigation, route }) {
         </Text>
         <TouchableOpacity
           onPress={() => {
-            if (cabId) {
-              dispatch(fetchCabById(cabId));
+            if (requestedCabId) {
+              dispatch(fetchCabById(requestedCabId));
             } else {
               navigation.goBack();
             }
@@ -356,7 +371,7 @@ export default function CabDetails({ navigation, route }) {
           className="mt-5 h-11 px-6 rounded-xl bg-[#0d3b8f] items-center justify-center"
           activeOpacity={0.85}
         >
-          <Text className="text-[13px] font-black text-white">{cabId ? "Retry" : "Go Back"}</Text>
+          <Text className="text-[13px] font-black text-white">{requestedCabId ? "Retry" : "Go Back"}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );

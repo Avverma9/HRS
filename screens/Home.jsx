@@ -211,7 +211,7 @@ const Home = ({ navigation }) => {
   // --- Main Render ---
   return (
     <View className="flex-1 bg-slate-50">
-      <StatusBar barStyle="light-content" backgroundColor="#0d3b8f" />
+      <StatusBar barStyle="dark-content" backgroundColor="#f7a78f" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

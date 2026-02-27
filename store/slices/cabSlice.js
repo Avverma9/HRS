@@ -1,6 +1,19 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../utils/api";
 
+const sanitizeUserId = (value) => String(value || "").trim().replace(/[<>\s]/g, "");
+
+const getCabId = (cab) =>
+  String(
+    cab?._id ??
+      cab?.carId ??
+      cab?.id ??
+      cab?.cabId ??
+      cab?.carID ??
+      cab?.cabID ??
+      ""
+  ).trim();
+
 const normalizeCabList = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
@@ -20,11 +33,11 @@ const normalizeCabBookingList = (payload) => {
 
 const normalizeCabItem = (payload) => {
   if (!payload) return null;
-  if (payload?._id) return payload;
-  if (payload?.data?._id) return payload.data;
-  if (payload?.car?._id) return payload.car;
-  if (Array.isArray(payload?.data) && payload.data[0]?._id) return payload.data[0];
-  if (Array.isArray(payload) && payload[0]?._id) return payload[0];
+  if (getCabId(payload)) return payload;
+  if (getCabId(payload?.data)) return payload.data;
+  if (getCabId(payload?.car)) return payload.car;
+  if (Array.isArray(payload?.data) && getCabId(payload.data[0])) return payload.data[0];
+  if (Array.isArray(payload) && getCabId(payload[0])) return payload[0];
   return null;
 };
 
@@ -118,14 +131,25 @@ export const filterCabsByQuery = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const queryParams = sanitizeCabFilterParams(params);
+      if (__DEV__) {
+        console.log("[filterCabsByQuery] request params:", queryParams);
+      }
       const response = await api.get("/travel/filter-car/by-query", {
         params: queryParams,
       });
+      const items = normalizeCabList(response?.data);
+      if (__DEV__) {
+        console.log("[filterCabsByQuery] response count:", items.length);
+        console.log("[filterCabsByQuery] response data:", response?.data);
+      }
       return {
-        items: normalizeCabList(response?.data),
+        items,
         message: response?.data?.message || null,
       };
     } catch (error) {
+      if (__DEV__) {
+        console.error("[filterCabsByQuery] error:", error?.response?.data || error);
+      }
       return rejectWithValue(
         error?.response?.data || { message: error?.message || "Unable to filter cabs" }
       );
@@ -218,7 +242,9 @@ export const fetchUserCabBookings = createAsyncThunk(
   "cab/fetchUserCabBookings",
   async (payload = {}, { rejectWithValue }) => {
     try {
-      const userId = String(payload?.userId || payload || "").trim();
+      const rawUserId =
+        payload && typeof payload === "object" ? payload?.userId : payload;
+      const userId = sanitizeUserId(rawUserId);
       if (!userId) {
         return rejectWithValue({ message: "User id is required." });
       }

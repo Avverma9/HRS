@@ -27,7 +27,9 @@ import {
 } from "../store/slices/profileUpdateSlice";
 import { fetchFilteredBooking } from "../store/slices/bookingSlice";
 import {
+  createHotelComplaint,
   fetchUserComplaints,
+  resetCreateComplaintState,
   resetComplaintChatState,
   sendComplaintChat,
 } from "../store/slices/complaintSlice";
@@ -55,6 +57,15 @@ const BOOKING_STATUS_OPTIONS = [
   "Checked-out",
   "Cancelled",
 ];
+const COMPLAINT_REGARDING_OPTIONS = ["Booking", "Service", "Payment", "Staff"];
+const INITIAL_COMPLAINT_FORM = {
+  hotelId: "",
+  regarding: "Booking",
+  hotelName: "",
+  hotelEmail: "",
+  bookingId: "",
+  issue: "",
+};
 
 const FALLBACK_COMPLAINTS = [
   {
@@ -210,6 +221,8 @@ const getCabDisplayName = (booking) => {
   return booking?.vehicleType || "Cab Booking";
 };
 
+const sanitizeUserId = (value) => String(value || "").trim().replace(/[<>\s]/g, "");
+
 const BookingCard = ({ item, onViewBooking }) => {
   const hotelName = item?.hotelDetails?.hotelName || "Hotel";
   const destination = item?.destination || item?.hotelDetails?.destination || "-";
@@ -311,6 +324,9 @@ const Profile = ({ navigation }) => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [showComplaintChatModal, setShowComplaintChatModal] = useState(false);
+  const [showCreateComplaintModal, setShowCreateComplaintModal] = useState(false);
+  const [complaintForm, setComplaintForm] = useState(INITIAL_COMPLAINT_FORM);
+  const [complaintImages, setComplaintImages] = useState([]);
   const [chatMessage, setChatMessage] = useState("");
   const complaintChatScrollRef = useRef(null);
   const [storedUserId, setStoredUserId] = useState(null);
@@ -353,6 +369,7 @@ const Profile = ({ navigation }) => {
   const coupons = toList(couponsState?.items);
   const bookingHistory = toList(userState?.bookingData);
   const complaints = toList(complaintsState?.items);
+  const isComplaintCreating = complaintsState?.createStatus === "loading";
 
   const profileImages = Array.isArray(user?.images) ? user.images.filter(Boolean) : [];
   const profileImage = profileImages[0] || user?.profile?.[0] || null;
@@ -373,15 +390,22 @@ const Profile = ({ navigation }) => {
   }, [selectedComplaint?.chats]);
 
   const userId = useMemo(
-    () =>
-      storedUserId ||
-      user?.userId ||
-      user?.id ||
-      user?._id ||
-      userState?.userId ||
-      userState?.id ||
-      userState?._id ||
-      null,
+    () => {
+      const candidates = [
+        storedUserId,
+        user?.userId,
+        user?.id,
+        user?._id,
+        userState?.userId,
+        userState?.id,
+        userState?._id,
+      ];
+      for (const candidate of candidates) {
+        const normalized = sanitizeUserId(candidate);
+        if (normalized) return normalized;
+      }
+      return null;
+    },
     [storedUserId, user?.userId, user?.id, user?._id, userState?.userId, userState?.id, userState?._id]
   );
 
@@ -583,6 +607,75 @@ const Profile = ({ navigation }) => {
     setSelectedComplaint(null);
     setChatMessage("");
     dispatch(resetComplaintChatState());
+  };
+
+  const handleOpenCreateComplaintModal = () => {
+    setComplaintForm(INITIAL_COMPLAINT_FORM);
+    setComplaintImages([]);
+    dispatch(resetCreateComplaintState());
+    setShowCreateComplaintModal(true);
+  };
+
+  const handleCloseCreateComplaintModal = () => {
+    if (isComplaintCreating) return;
+    setShowCreateComplaintModal(false);
+  };
+
+  const handlePickComplaintImages = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: 3,
+        quality: 0.8,
+      });
+
+      if (result?.canceled) return;
+
+      const nextImages = (result?.assets || [])
+        .filter((asset) => asset?.uri)
+        .map((asset) => ({
+          uri: asset.uri,
+          name: asset.fileName || getFileName(asset.uri),
+          type: asset.mimeType || getMimeType(asset.uri),
+        }));
+
+      if (!nextImages.length) return;
+      setComplaintImages((prev) => [...prev, ...nextImages].slice(0, 3));
+    } catch {
+    }
+  };
+
+  const handleRemoveComplaintImage = (uri) => {
+    setComplaintImages((prev) => prev.filter((image) => image?.uri !== uri));
+  };
+
+  const handleCreateComplaint = async () => {
+    if (!userId) return;
+
+    try {
+      await dispatch(
+        createHotelComplaint({
+          userId,
+          hotelId: complaintForm.hotelId?.trim(),
+          regarding: complaintForm.regarding?.trim(),
+          hotelName: complaintForm.hotelName?.trim(),
+          hotelEmail: complaintForm.hotelEmail?.trim(),
+          bookingId: complaintForm.bookingId?.trim(),
+          issue: complaintForm.issue?.trim(),
+          status: "Pending",
+          images: complaintImages,
+        })
+      ).unwrap();
+
+      setShowCreateComplaintModal(false);
+      setComplaintForm(INITIAL_COMPLAINT_FORM);
+      setComplaintImages([]);
+      dispatch(resetCreateComplaintState());
+      dispatch(fetchUserComplaints({ userId }));
+    } catch {
+    }
   };
 
   const handleSendComplaintMessage = async () => {
@@ -1014,71 +1107,111 @@ const renderCoupons = () => (
   );
 
   const renderComplaints = () => {
-    if (complaintsState?.status === "loading") {
-      return (
-        <View>
-          {[0, 1, 2].map((idx) => (
-            <ComplaintCardSkeleton key={`complaint-skeleton-${idx}`} />
-          ))}
-        </View>
-      );
-    }
+    const renderComplaintList = () => {
+      if (complaintsState?.status === "loading") {
+        return (
+          <View>
+            {[0, 1, 2].map((idx) => (
+              <ComplaintCardSkeleton key={`complaint-skeleton-${idx}`} />
+            ))}
+          </View>
+        );
+      }
 
-    if (complaintsState?.status === "failed") {
-      return (
-        <Text className="text-xs text-red-600 font-bold mb-3">
-          {String(complaintsState?.error?.message || complaintsState?.error || "Unable to load complaints")}
-        </Text>
-      );
-    }
+      if (complaintsState?.status === "failed") {
+        return (
+          <Text className="text-xs text-red-600 font-bold mb-3">
+            {String(complaintsState?.error?.message || complaintsState?.error || "Unable to load complaints")}
+          </Text>
+        );
+      }
 
-    return complaintItems.map((complaint, index) => {
-      const status = String(complaint?.status || "In Progress");
-      const resolved = status.toLowerCase().includes("resolve");
-      const messageCount = toList(complaint?.chats).length;
+      return complaintItems.map((complaint, index) => {
+        const status = String(complaint?.status || "In Progress");
+        const resolved = status.toLowerCase().includes("resolve");
+        const messageCount = toList(complaint?.chats).length;
 
-      return (
-        <View
-          key={complaint?.id || complaint?._id || `complaint-${index}`}
-          className="bg-white rounded-xl border border-slate-200 p-4 mb-3 shadow-sm"
-        >
-          <View className="flex-row items-center mb-3">
-            <View className="w-10 h-10 rounded-full bg-red-50 items-center justify-center mr-3">
-              <Ionicons name="alert-circle-outline" size={20} color="#ef4444" />
+        return (
+          <View
+            key={complaint?.id || complaint?._id || `complaint-${index}`}
+            className="bg-white rounded-xl border border-slate-200 p-4 mb-3 shadow-sm"
+          >
+            <View className="flex-row items-center mb-3">
+              <View className="w-10 h-10 rounded-full bg-red-50 items-center justify-center mr-3">
+                <Ionicons name="alert-circle-outline" size={20} color="#ef4444" />
+              </View>
+
+              <View className="flex-1 mr-3">
+                <Text className="text-base font-bold text-slate-900" numberOfLines={1}>
+                  {complaint?.issue || complaint?.title || complaint?.regarding || "Complaint"}
+                </Text>
+                <Text className="text-xs text-slate-400 mt-0.5">ID: {complaint?.complaintId || "-"}</Text>
+              </View>
+
+              <View className={`px-3 py-1.5 rounded ${resolved ? "bg-emerald-50" : "bg-orange-50"}`}>
+                <Text className={`text-[10px] font-bold ${resolved ? "text-emerald-600" : "text-orange-600"}`}>
+                  {status}
+                </Text>
+              </View>
             </View>
 
-            <View className="flex-1 mr-3">
-              <Text className="text-base font-bold text-slate-900" numberOfLines={1}>
-                {complaint?.issue || complaint?.title || complaint?.regarding || "Complaint"}
-              </Text>
-              <Text className="text-xs text-slate-400 mt-0.5">ID: {complaint?.complaintId || "-"}</Text>
-            </View>
-
-            <View className={`px-3 py-1.5 rounded ${resolved ? "bg-emerald-50" : "bg-orange-50"}`}>
-              <Text className={`text-[10px] font-bold ${resolved ? "text-emerald-600" : "text-orange-600"}`}>
-                {status}
-              </Text>
+            <View className="pt-3 border-t border-slate-100 flex-row items-center justify-between">
+              <Text className="text-[11px] text-slate-400">Raised on: {formatLongDate(complaint?.createdAt || complaint?.raisedOn)}</Text>
+              <TouchableOpacity
+                className="h-8 px-3 rounded-lg bg-indigo-600 items-center justify-center flex-row"
+                onPress={() => handleOpenComplaintChat(complaint)}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={13} color="#fff" />
+                <Text className="text-xs font-bold text-white ml-1.5">Open Chat</Text>
+                {!!messageCount && (
+                  <View className="ml-2 px-1.5 h-4 rounded-full bg-white/25 items-center justify-center">
+                    <Text className="text-[10px] font-black text-white">{messageCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
+        );
+      });
+    };
 
-          <View className="pt-3 border-t border-slate-100 flex-row items-center justify-between">
-            <Text className="text-[11px] text-slate-400">Raised on: {formatLongDate(complaint?.createdAt || complaint?.raisedOn)}</Text>
+    return (
+      <View>
+        <View className="bg-white rounded-xl border border-slate-200 p-4 mb-3 shadow-sm">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 pr-3">
+              <Text className="text-base font-extrabold text-slate-900">Raise a New Complaint</Text>
+              <Text className="text-xs text-slate-500 mt-1">
+                Booking issue ho to yahan se direct complaint create karein.
+              </Text>
+            </View>
             <TouchableOpacity
-              className="h-8 px-3 rounded-lg bg-indigo-600 items-center justify-center flex-row"
-              onPress={() => handleOpenComplaintChat(complaint)}
+              onPress={handleOpenCreateComplaintModal}
+              disabled={!userId || isComplaintCreating}
+              className={`h-10 px-4 rounded-xl items-center justify-center ${
+                !userId || isComplaintCreating ? "bg-slate-300" : "bg-red-600"
+              }`}
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={13} color="#fff" />
-              <Text className="text-xs font-bold text-white ml-1.5">Open Chat</Text>
-              {!!messageCount && (
-                <View className="ml-2 px-1.5 h-4 rounded-full bg-white/25 items-center justify-center">
-                  <Text className="text-[10px] font-black text-white">{messageCount}</Text>
-                </View>
+              {isComplaintCreating ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text className="text-xs font-black text-white">Create</Text>
               )}
             </TouchableOpacity>
           </View>
+          {!userId && (
+            <Text className="text-[11px] text-red-500 mt-2">Login required to create complaint.</Text>
+          )}
+          {complaintsState?.createStatus === "failed" && (
+            <Text className="text-[11px] text-red-500 mt-2">
+              {String(complaintsState?.createError?.message || complaintsState?.createError || "Unable to create complaint")}
+            </Text>
+          )}
         </View>
-      );
-    });
+
+        {renderComplaintList()}
+      </View>
+    );
   };
 
   const renderProfileTab = () => (
@@ -1166,7 +1299,7 @@ const renderCoupons = () => (
     selectedBookingType === "Tour" || Boolean(selectedBooking?.tourId);
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right", "bottom"]}>
       <View className="flex-1">
         <Header
           compact
@@ -1254,6 +1387,159 @@ const renderCoupons = () => (
         onClose={handleCloseBookingModal}
         booking={selectedBooking}
       />
+
+      <Modal
+        animationType="slide"
+        transparent
+        visible={showCreateComplaintModal}
+        onRequestClose={handleCloseCreateComplaintModal}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+          <View className="flex-1 bg-black/45 justify-end">
+            <View className="bg-white rounded-t-3xl px-4 pt-4 pb-5 max-h-[88%]">
+              <View className="flex-row items-center justify-between mb-3">
+                <View>
+                  <Text className="text-[18px] font-black text-slate-900">Create Complaint</Text>
+                  <Text className="text-[12px] text-slate-500 mt-0.5">Hotel support ticket raise karein</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={handleCloseCreateComplaintModal}
+                  className="h-9 w-9 rounded-full bg-slate-100 items-center justify-center"
+                  disabled={isComplaintCreating}
+                >
+                  <Ionicons name="close" size={18} color="#475569" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text className="text-[11px] font-bold text-slate-600 mb-1">Hotel ID</Text>
+                <TextInput
+                  value={complaintForm.hotelId}
+                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, hotelId: text }))}
+                  placeholder="67b0f53a7a0a3d4ec1234567"
+                  placeholderTextColor="#94a3b8"
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900"
+                />
+
+                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Hotel Name</Text>
+                <TextInput
+                  value={complaintForm.hotelName}
+                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, hotelName: text }))}
+                  placeholder="Hotel Blue Star"
+                  placeholderTextColor="#94a3b8"
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900"
+                />
+
+                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Hotel Email</Text>
+                <TextInput
+                  value={complaintForm.hotelEmail}
+                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, hotelEmail: text }))}
+                  placeholder="support@hotel.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  placeholderTextColor="#94a3b8"
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900"
+                />
+
+                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Booking ID</Text>
+                <TextInput
+                  value={complaintForm.bookingId}
+                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, bookingId: text }))}
+                  placeholder="BK-90211"
+                  placeholderTextColor="#94a3b8"
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900"
+                />
+
+                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Regarding</Text>
+                <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+                  {COMPLAINT_REGARDING_OPTIONS.map((option) => {
+                    const active = complaintForm.regarding === option;
+                    return (
+                      <TouchableOpacity
+                        key={option}
+                        onPress={() => setComplaintForm((prev) => ({ ...prev, regarding: option }))}
+                        className={`px-3 py-2 rounded-xl border ${
+                          active ? "bg-blue-50 border-blue-500" : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <Text className={`text-[12px] font-bold ${active ? "text-blue-700" : "text-slate-600"}`}>
+                          {option}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Issue</Text>
+                <TextInput
+                  value={complaintForm.issue}
+                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, issue: text }))}
+                  placeholder="Room was not cleaned on check-in"
+                  placeholderTextColor="#94a3b8"
+                  multiline
+                  textAlignVertical="top"
+                  className="h-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-900"
+                />
+
+                <View className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-[11px] font-bold text-slate-600">
+                      Attach Images ({complaintImages.length}/3)
+                    </Text>
+                    <TouchableOpacity
+                      onPress={handlePickComplaintImages}
+                      className="px-3 h-8 rounded-lg bg-slate-900 items-center justify-center"
+                    >
+                      <Text className="text-[11px] font-bold text-white">Add</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {!!complaintImages.length && (
+                    <View className="mt-2">
+                      {complaintImages.map((image, index) => (
+                        <View
+                          key={image?.uri || `complaint-image-${index}`}
+                          className="flex-row items-center justify-between bg-white rounded-lg border border-slate-200 px-3 py-2 mb-2"
+                        >
+                          <Text className="flex-1 text-[11px] font-semibold text-slate-700 mr-2" numberOfLines={1}>
+                            {image?.name || `Image ${index + 1}`}
+                          </Text>
+                          <TouchableOpacity onPress={() => handleRemoveComplaintImage(image?.uri)}>
+                            <Ionicons name="close-circle" size={18} color="#ef4444" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+
+              <View className="mt-4 flex-row">
+                <TouchableOpacity
+                  onPress={handleCloseCreateComplaintModal}
+                  disabled={isComplaintCreating}
+                  className="flex-1 h-11 rounded-xl bg-slate-100 items-center justify-center mr-2"
+                >
+                  <Text className="text-[13px] font-black text-slate-700">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleCreateComplaint}
+                  disabled={isComplaintCreating || !userId}
+                  className={`flex-[1.4] h-11 rounded-xl items-center justify-center ${
+                    isComplaintCreating || !userId ? "bg-slate-300" : "bg-red-600"
+                  }`}
+                >
+                  {isComplaintCreating ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text className="text-[13px] font-black text-white">Submit Complaint</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <Modal
         animationType="slide"

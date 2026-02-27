@@ -2,11 +2,64 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../utils/api";
 import { getUserId } from "../../utils/credentials";
 
+const sanitizeUserId = (value) => String(value || "").trim().replace(/[<>\s]/g, "");
+const COMPLAINT_CREATE_PATHS = [
+  "/create-a-complaint/on/hotel",
+  "/api/create-a-complaint/on/hotel",
+];
+
 const normalizeComplaintResponse = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
   if (Array.isArray(payload?.complaints)) return payload.complaints;
   return [];
+};
+
+const shouldRetryWithAltPath = (error) => {
+  const statusCode = Number(error?.response?.status || 0);
+  const message = String(error?.response?.data?.message || error?.message || "").toLowerCase();
+  return statusCode === 404 || message.includes("cannot post") || message.includes("cannot get");
+};
+
+const postHotelComplaint = async (payload, config = {}) => {
+  let lastError = null;
+
+  for (let index = 0; index < COMPLAINT_CREATE_PATHS.length; index += 1) {
+    const path = COMPLAINT_CREATE_PATHS[index];
+    try {
+      return await api.post(path, payload, config);
+    } catch (error) {
+      lastError = error;
+      const hasNextPath = index < COMPLAINT_CREATE_PATHS.length - 1;
+      if (!hasNextPath || !shouldRetryWithAltPath(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error("Unable to create complaint");
+};
+
+const toUploadFile = (image, index) => {
+  if (!image) return null;
+
+  if (typeof image === "string") {
+    const uri = image.trim();
+    if (!uri) return null;
+    return {
+      uri,
+      name: `complaint-image-${Date.now()}-${index + 1}.jpg`,
+      type: "image/jpeg",
+    };
+  }
+
+  const uri = String(image?.uri || "").trim();
+  if (!uri) return null;
+  return {
+    uri,
+    name: image?.name || `complaint-image-${Date.now()}-${index + 1}.jpg`,
+    type: image?.type || "image/jpeg",
+  };
 };
 
 export const fetchUserComplaints = createAsyncThunk(
@@ -59,6 +112,75 @@ export const sendComplaintChat = createAsyncThunk(
   }
 );
 
+export const createHotelComplaint = createAsyncThunk(
+  "complaints/createHotelComplaint",
+  async (input = {}, { rejectWithValue }) => {
+    try {
+      const resolvedUserId = sanitizeUserId(input?.userId || (await getUserId()));
+      const hotelId = String(input?.hotelId || "").trim();
+      const regarding = String(input?.regarding || "").trim();
+      const hotelName = String(input?.hotelName || "").trim();
+      const hotelEmail = String(input?.hotelEmail || "").trim();
+      const bookingId = String(input?.bookingId || "").trim();
+      const issue = String(input?.issue || "").trim();
+      const status = String(input?.status || "Pending").trim() || "Pending";
+
+      if (
+        !resolvedUserId ||
+        !hotelId ||
+        !regarding ||
+        !hotelName ||
+        !hotelEmail ||
+        !bookingId ||
+        !issue
+      ) {
+        return rejectWithValue({ message: "Missing required fields." });
+      }
+
+      const images = Array.isArray(input?.images) ? input.images : [];
+      const uploadFiles = images
+        .map((image, index) => toUploadFile(image, index))
+        .filter(Boolean);
+
+      if (uploadFiles.length > 0) {
+        const formData = new FormData();
+        formData.append("userId", resolvedUserId);
+        formData.append("hotelId", hotelId);
+        formData.append("regarding", regarding);
+        formData.append("hotelName", hotelName);
+        formData.append("hotelEmail", hotelEmail);
+        formData.append("bookingId", bookingId);
+        formData.append("issue", issue);
+        formData.append("status", status);
+        uploadFiles.forEach((file) => {
+          formData.append("images", file);
+        });
+
+        const response = await postHotelComplaint(formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        return response?.data || null;
+      }
+
+      const response = await postHotelComplaint({
+        userId: resolvedUserId,
+        hotelId,
+        regarding,
+        hotelName,
+        hotelEmail,
+        bookingId,
+        issue,
+        status,
+      });
+      return response?.data || null;
+    } catch (error) {
+      return rejectWithValue(
+        error?.response?.data || { message: error?.message || "Unable to create complaint" }
+      );
+    }
+  }
+);
+
 const complaintSlice = createSlice({
   name: "complaints",
   initialState: {
@@ -67,6 +189,9 @@ const complaintSlice = createSlice({
     error: null,
     chatStatus: "idle",
     chatError: null,
+    createStatus: "idle",
+    createError: null,
+    createData: null,
   },
   reducers: {
     resetComplaintsState: (state) => {
@@ -75,10 +200,18 @@ const complaintSlice = createSlice({
       state.error = null;
       state.chatStatus = "idle";
       state.chatError = null;
+      state.createStatus = "idle";
+      state.createError = null;
+      state.createData = null;
     },
     resetComplaintChatState: (state) => {
       state.chatStatus = "idle";
       state.chatError = null;
+    },
+    resetCreateComplaintState: (state) => {
+      state.createStatus = "idle";
+      state.createError = null;
+      state.createData = null;
     },
   },
   extraReducers: (builder) => {
@@ -106,9 +239,21 @@ const complaintSlice = createSlice({
       .addCase(sendComplaintChat.rejected, (state, action) => {
         state.chatStatus = "failed";
         state.chatError = action.payload || { message: "Failed to send message" };
+      })
+      .addCase(createHotelComplaint.pending, (state) => {
+        state.createStatus = "loading";
+        state.createError = null;
+      })
+      .addCase(createHotelComplaint.fulfilled, (state, action) => {
+        state.createStatus = "succeeded";
+        state.createData = action.payload || null;
+      })
+      .addCase(createHotelComplaint.rejected, (state, action) => {
+        state.createStatus = "failed";
+        state.createError = action.payload || { message: "Failed to create complaint" };
       });
   },
 });
 
-export const { resetComplaintsState, resetComplaintChatState } = complaintSlice.actions;
+export const { resetComplaintsState, resetComplaintChatState, resetCreateComplaintState } = complaintSlice.actions;
 export default complaintSlice.reducer;

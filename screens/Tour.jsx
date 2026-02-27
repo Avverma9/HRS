@@ -17,6 +17,7 @@ import {
 } from "../store/slices/tourSlice";
 import { useNavigation } from "@react-navigation/native";
 import { TourCardSkeleton } from "../components/skeleton/TourSkeleton";
+import Header from "../components/Header";
 
 const toNumber = (value) => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -63,10 +64,12 @@ function PrimaryButton({ title, onPress }) {
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.9}
-      className="h-8 rounded-lg px-2.5 bg-[#0d3b8f] flex-row items-center justify-center"
-      style={{ gap: 4 }}
+      className="h-8 min-w-[86px] rounded-lg px-2.5 bg-[#0d3b8f] flex-row items-center justify-center shrink-0"
+      style={{ gap: 4, maxWidth: 98 }}
     >
-      <Text className="text-white font-extrabold text-[11px]">{title}</Text>
+      <Text className="text-white font-extrabold text-[11px]" numberOfLines={1} ellipsizeMode="tail">
+        {title}
+      </Text>
       <Ionicons name="arrow-forward" size={10} color="#ffffff" />
     </TouchableOpacity>
   );
@@ -88,7 +91,7 @@ function TourCard({ tour, onPressDetails }) {
   const mainImage = tour?.images?.[0] || "";
 
   return (
-    <View className="mx-4 mb-2.5 bg-white rounded-xl border border-slate-200 p-2">
+    <View className="mx-4 mb-2.5 bg-white rounded-xl border border-slate-200 p-2 overflow-hidden">
       <View className="flex-row h-[120px]">
         <View className="w-[98px] h-[120px] rounded-[10px] overflow-hidden bg-slate-200 relative">
           {mainImage ? (
@@ -141,15 +144,19 @@ function TourCard({ tour, onPressDetails }) {
             </View>
           </View>
 
-          <View className="flex-row items-end justify-between mt-1">
-            <View className="flex-1 pr-1.5">
+          <View className="flex-row items-end justify-between mt-1" style={{ minWidth: 0 }}>
+            <View className="flex-1 pr-1.5" style={{ minWidth: 0 }}>
               <Text className="text-[8px] font-black tracking-wider text-slate-400">STARTING FROM</Text>
-              <Text className="text-[18px] leading-[20px] font-black text-[#0d3b8f]" numberOfLines={1}>
+              <Text
+                className="text-[18px] leading-[20px] font-black text-[#0d3b8f]"
+                numberOfLines={1}
+                style={{ flexShrink: 1 }}
+              >
                 {formatINR(price)}
               </Text>
               <Text className="text-[10px] font-semibold text-slate-500 mt-[-1px]">/ person</Text>
             </View>
-            <PrimaryButton title="View details" onPress={onPressDetails} />
+            <PrimaryButton title="View" onPress={onPressDetails} />
           </View>
         </View>
       </View>
@@ -315,27 +322,32 @@ export default function Tour() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0d3b8f]">
+    <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right", "bottom"]}>
       <ScrollView
         className="flex-1 bg-slate-100"
-        contentContainerStyle={{ paddingBottom: 24 }}
-        stickyHeaderIndices={[0]}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        stickyHeaderIndices={[1]}
       >
-        <View className="pt-2 pb-3 bg-[#0d3b8f] rounded-b-[28px] z-20">
-          <View className="mx-3 bg-[#e8f0ff] rounded-2xl border border-[#c7d8f7] px-3 py-2">
+        <Header
+          compact
+          showHero={false}
+          showBack
+          leftTitle="Explore Tours"
+          onBackPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+              return;
+            }
+            navigation.navigate("Search");
+          }}
+        />
+
+        <View className="pt-2 pb-3 bg-slate-100 z-20">
+          <View className="mx-3 bg-white rounded-2xl border border-slate-200 px-3 py-2">
             <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center " style={{ gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => navigation.goBack()}
-                  activeOpacity={0.9}
-                  className="h-10 w-10 rounded-2xl bg-white border border-slate-200 items-center justify-center"
-                >
-                  <Ionicons name="arrow-back" size={18} color="#0f172a" />
-                </TouchableOpacity>
-                <View > 
-                  <Text className="text-[17px]  font-black text-slate-900">Explore Tours</Text>
-                  <Text className="text-[12px] mt-0.5 text-slate-600">Compact search | better filters</Text>
-                </View>
+              <View>
+                <Text className="text-[17px] font-black text-slate-900">Find Your Tour</Text>
+                <Text className="text-[12px] mt-0.5 text-slate-500">Search by route, city, or package</Text>
               </View>
 
               <TouchableOpacity
@@ -345,7 +357,7 @@ export default function Tour() {
               >
                 <Ionicons name="options-outline" size={18} color="#0f172a" />
                 {activeFilterCount > 0 && (
-                  <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0d3b8f] border border-white items-center justify-center">
+                  <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#be4a6a] border border-white items-center justify-center">
                     <Text className="text-white text-[10px] font-black">
                       {activeFilterCount > 99 ? "99+" : activeFilterCount}
                     </Text>
@@ -356,7 +368,7 @@ export default function Tour() {
 
             {/* FROM / TO (compact) */}
             <View className="mt-3 flex-row" style={{ gap: 10 }}>
-              <View className="flex-1 h-11 rounded-2xl bg-[#e8f0ff] border border-[#c7d8f7] px-3 flex-row items-center" style={{ gap: 8 }}>
+              <View className="flex-1 h-11 rounded-2xl bg-[#fff4ef] border border-[#f3d5cb] px-3 flex-row items-center" style={{ gap: 8 }}>
                 <Ionicons name="radio-button-on" size={14} color="#10b981" />
                 <TextInput
                   value={fromCity}
@@ -367,7 +379,7 @@ export default function Tour() {
                   autoCorrect={false}
                 />
               </View>
-              <View className="flex-1 h-11 rounded-2xl bg-[#e8f0ff] border border-[#c7d8f7] px-3 flex-row items-center" style={{ gap: 8 }}>
+              <View className="flex-1 h-11 rounded-2xl bg-[#fff4ef] border border-[#f3d5cb] px-3 flex-row items-center" style={{ gap: 8 }}>
                 <Ionicons name="location" size={14} color="#3b82f6" />
                 <TextInput
                   value={toCity}
@@ -381,7 +393,7 @@ export default function Tour() {
             </View>
 
             {/* Search */}
-            <View className="mt-3 h-11 rounded-2xl bg-[#e8f0ff] border border-[#c7d8f7] px-3 flex-row items-center">
+            <View className="mt-3 h-11 rounded-2xl bg-[#fff4ef] border border-[#f3d5cb] px-3 flex-row items-center">
               <Ionicons name="search" size={16} color="#64748b" />
               <TextInput
                 value={searchText}

@@ -27,6 +27,7 @@ import TourDetails from './screens/TourDetails';
 import Hotels from './screens/Hotels';
 import HotelDetails from './screens/HotelDetails';
 import CabDetails from './screens/CabDetails.jsx';
+import Notifications from './screens/Notifications';
 import Profile from './screens/Profile';
 import ServerUnavailable from './screens/ServerUnavailable';
 import { fetchLocation } from './store/slices/locationSlice';
@@ -223,6 +224,7 @@ function RootNavigator() {
       ) : isSignedIn ? (
         <>
           <Stack.Screen name="MainTabs" component={TabNavigator} />
+          <Stack.Screen name="Notifications" component={Notifications} />
           <Stack.Screen name="TourDetails" component={TourDetails} />
           <Stack.Screen name="CabDetails" component={CabDetails} />
         </>

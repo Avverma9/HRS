@@ -16,6 +16,7 @@ import { useNavigation } from "@react-navigation/native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { fetchAllCabs, filterCabsByQuery } from "../store/slices/cabSlice";
 import CabsSkeleton from "../components/skeleton/CabsSkeleton";
+import Header from "../components/Header";
 
 const FILTERS = ["All", "Car", "Bus", "Shared", "Private"];
 
@@ -57,6 +58,17 @@ const getBookedSeats = (cab) =>
 
 const getFare = (cab) =>
   String(cab?.sharingType || "").toLowerCase() === "shared" ? cab?.perPersonCost : cab?.price;
+
+const getCabId = (cab) =>
+  String(
+    cab?._id ??
+      cab?.carId ??
+      cab?.id ??
+      cab?.cabId ??
+      cab?.carID ??
+      cab?.cabID ??
+      ""
+  ).trim();
 
 const resolveCabBookingState = (cab) => {
   const isRunning = normalizeBool(cab?.isRunning);
@@ -241,8 +253,7 @@ export default function Cabs() {
   };
 
   return (
-    // SafeArea wrapper with dark slate background for top status bar area
-    <SafeAreaView className="flex-1 bg-[#0d3b8f]" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right", "bottom"]}>
       <ScrollView
         className="flex-1 bg-slate-50"
         contentContainerStyle={{ paddingBottom: 30 }}
@@ -253,18 +264,25 @@ export default function Cabs() {
         {/* INDEX 0: HEADER & SEARCH CARD              */}
         {/* ========================================== */}
         <View className="bg-slate-100 border-b border-slate-200">
-          
-          {/* Header Background */}
-          <View className="bg-[#0d3b8f] px-5 pt-4 pb-16 rounded-b-[32px]">
-            <Text className="text-[28px] font-black text-white tracking-tight">Book your ride</Text>
-            <Text className="text-[14px] font-medium text-slate-400 mt-1">Comfortable & affordable intercity travel</Text>
-          </View>
+          <Header
+            compact
+            showHero={false}
+            showBack
+            leftTitle="Book Your Ride"
+            onBackPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+                return;
+              }
+              navigation.navigate("Search");
+            }}
+          />
 
           {/* Overlapping Search Card */}
-          <View className="-mt-11 mx-4 bg-white rounded-2xl p-3 border border-slate-200 shadow-sm elevation-3">
+          <View className="mt-3 mx-4 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm elevation-3">
             
             {/* Transit Route Input */}
-            <View className="flex-row items-center bg-slate-50 rounded-xl p-3 border border-slate-100 relative">
+            <View className="flex-row items-center bg-slate-50 rounded-xl p-3.5 border border-slate-100 relative">
               
               <View className="items-center mr-3">
                 <View className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -278,32 +296,32 @@ export default function Cabs() {
                   onChangeText={(t) => setRoute((p) => ({ ...p, pickup: t }))}
                   placeholder="Enter Pickup Location"
                   placeholderTextColor="#94a3b8"
-                  className="h-9 text-[15px] font-bold text-slate-900 p-0"
+                  className="h-10 text-[15px] font-bold text-slate-900 p-0"
                 />
-                <View className="h-[1px] bg-slate-200 w-full my-1" />
+                <View className="h-[1px] bg-slate-200 w-full my-1.5" />
                 <TextInput
                   value={route.drop}
                   onChangeText={(t) => setRoute((p) => ({ ...p, drop: t }))}
                   placeholder="Enter Drop Location"
                   placeholderTextColor="#94a3b8"
-                  className="h-9 text-[15px] font-bold text-slate-900 p-0"
+                  className="h-10 text-[15px] font-bold text-slate-900 p-0"
                 />
               </View>
 
               <TouchableOpacity 
                 activeOpacity={0.8} 
                 onPress={handleSwap}
-                className="absolute right-3 top-1/2 -mt-[18px] h-9 w-9 rounded-full bg-white items-center justify-center border border-slate-200 shadow-sm elevation-2"
+                className="absolute right-3 top-1/2 -mt-[20px] h-10 w-10 rounded-full bg-white items-center justify-center border border-slate-200 shadow-sm elevation-2"
               >
                 <Ionicons name="swap-vertical" size={18} color="#0d3b8f" />
               </TouchableOpacity>
             </View>
 
             {/* Date & Time Row */}
-            <View className="flex-row mt-3 gap-3">
+            <View className="flex-row mt-4 gap-3">
               <TouchableOpacity 
                 style={{ flex: 1 }} 
-                className="flex-row items-center justify-between bg-white rounded-xl border border-slate-200 px-3.5 py-2.5" 
+                className="flex-row items-center justify-between bg-white rounded-xl border border-slate-200 px-3.5 py-3" 
                 onPress={() => setOpenPicker("date")}
               >
                 <View>
@@ -315,7 +333,7 @@ export default function Cabs() {
 
               <TouchableOpacity 
                 style={{ flex: 1 }} 
-                className="flex-row items-center justify-between bg-white rounded-xl border border-slate-200 px-3.5 py-2.5" 
+                className="flex-row items-center justify-between bg-white rounded-xl border border-slate-200 px-3.5 py-3" 
                 onPress={() => setOpenPicker("time")}
               >
                 <View>
@@ -328,7 +346,7 @@ export default function Cabs() {
 
             {/* Search Button */}
             <TouchableOpacity 
-              className="mt-3 h-12 bg-[#0d3b8f] rounded-xl items-center justify-center" 
+              className="mt-4 h-[52px] bg-[#0d3b8f] rounded-xl items-center justify-center" 
               activeOpacity={0.9} 
               onPress={handleCabSearch}
             >
@@ -435,7 +453,7 @@ export default function Cabs() {
                   : { chip: "bg-rose-50 border-rose-200", text: "text-rose-700" };
 
               return (
-                <View key={cab?._id || `cab-${idx}`} className="bg-white rounded-[20px] border border-slate-200 p-3 mb-3.5 shadow-sm elevation-2">
+                <View key={getCabId(cab) || `cab-${idx}`} className="bg-white rounded-[20px] border border-slate-200 p-3 mb-3.5 shadow-sm elevation-2">
                   
                   {/* Top Row */}
                   <View className="flex-row">
@@ -497,8 +515,9 @@ export default function Cabs() {
                       activeOpacity={canBook ? 0.8 : 1}
                       onPress={() => {
                         if (!canBook) return;
+                        const cabId = getCabId(cab);
                         navigation.navigate("CabDetails", {
-                          cabId: cab?._id,
+                          cabId: cabId || undefined,
                           cab,
                         });
                       }}

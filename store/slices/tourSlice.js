@@ -30,11 +30,19 @@ export const filterToursByQuery = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const response = await api.get("/filter-tour/by-query", { params });
+      const items = normalizeTourResponse(response?.data);
+      if (__DEV__) {
+        console.log("[filterToursByQuery] response count:", items.length);
+        console.log("[filterToursByQuery] response data:", response?.data);
+      }
       return {
-        items: normalizeTourResponse(response?.data),
+        items,
         message: response?.data?.message || null,
       };
     } catch (error) {
+      if (__DEV__) {
+        console.error("[filterToursByQuery] error:", error?.response?.data || error);
+      }
       return rejectWithValue(
         error?.response?.data || { message: error?.message || "Unable to filter tours" }
       );

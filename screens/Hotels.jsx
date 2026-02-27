@@ -20,6 +20,7 @@ import { MaterialCommunityIcons, Ionicons, MaterialIcons } from "@expo/vector-ic
 import SearchCard from "../components/SearchCard";
 import SkeletonShimmer from "../components/skeleton/SkeletonShimmer";
 import { HotelCardSkeleton } from "../components/skeleton/HotelSkeleton";
+import Header from "../components/Header";
 import {
   extractHotelAmenities,
   getAmenityDisplayName,
@@ -80,6 +81,16 @@ const Hotels = ({ navigation, route }) => {
   }, [hotels]);
 
   const topPadding = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
+
+  const getHotelUniqueId = (hotel) =>
+    hotel?.hotelId ??
+    hotel?._id ??
+    hotel?.id ??
+    hotel?.hotelID ??
+    hotel?.hotel_id ??
+    hotel?.basicInfo?._id ??
+    hotel?.basicInfo?.id ??
+    null;
 
   useEffect(() => {
     dispatch(getBeds());
@@ -275,11 +286,17 @@ const Hotels = ({ navigation, route }) => {
     const lowestPrice = hotel.rooms?.length > 0
       ? Math.min(...hotel.rooms.map((room) => room.price))
       : 2499;
-    const hotelId = hotel.hotelId || hotel._id;
+    const hotelId = getHotelUniqueId(hotel);
     const mainImage = hotel.images?.[0] || null;
     const openHotelDetails = () => {
       if (!hotelId) return;
-      navigation.navigate("HotelDetails", { hotelId });
+      navigation.navigate("HotelDetails", {
+        hotelId: String(hotelId),
+        checkInDate: localCheckIn,
+        checkOutDate: localCheckOut,
+        guests: localGuests,
+        countRooms: localRooms,
+      });
     };
 
     return (
@@ -417,25 +434,28 @@ const Hotels = ({ navigation, route }) => {
   }
 
   return (
-    <View className="flex-1 bg-slate-50" style={{ paddingTop: topPadding }}>
-      {/* Custom Header */}
+    <View className="flex-1 bg-slate-50">
+      <Header
+        compact
+        showHero={false}
+        showBack={navigation.canGoBack()}
+        showBrand={!navigation.canGoBack()}
+        leftTitle="Explore Hotels"
+        onBackPress={() => navigation.goBack()}
+      />
+
       <View className="bg-white px-4 py-3 flex-row items-center justify-between border-b border-slate-100">
-          <View className="flex-row items-center flex-1">
-              <TouchableOpacity onPress={() => navigation.goBack()} className="mr-3">
-                  <Ionicons name="arrow-back" size={24} color="#1e293b" />
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-1" onPress={() => setShowSearchModal(true)}>
-                  <Text className="text-[17px] font-bold text-slate-900 leading-tight" numberOfLines={1}>
-                    {localCity || (showAll ? "All Hotels" : "Where to?")}
-                  </Text>
-                  <Text className="text-[11px] text-slate-500 font-medium mt-0.5">
-                    {display(localCheckIn)} - {display(localCheckOut)} • {localGuests} Guest{localGuests > 1 ? 's' : ''}
-                  </Text>
-              </TouchableOpacity>
-          </View>
-          <TouchableOpacity onPress={() => setShowSearchModal(true)}>
-             <Ionicons name="create-outline" size={24} color="#475569" />
-          </TouchableOpacity>
+        <TouchableOpacity className="flex-1" onPress={() => setShowSearchModal(true)}>
+          <Text className="text-[17px] font-bold text-slate-900 leading-tight" numberOfLines={1}>
+            {localCity || (showAll ? "All Hotels" : "Where to?")}
+          </Text>
+          <Text className="text-[11px] text-slate-500 font-medium mt-0.5">
+            {display(localCheckIn)} - {display(localCheckOut)} • {localGuests} Guest{localGuests > 1 ? "s" : ""}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowSearchModal(true)}>
+          <Ionicons name="create-outline" size={24} color="#475569" />
+        </TouchableOpacity>
       </View>
 
       {/* Filter Chips */}
@@ -491,7 +511,7 @@ const Hotels = ({ navigation, route }) => {
         <FlatList
           data={hotels}
           renderItem={({ item }) => <HotelCard hotel={item} />}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item, index) => String(getHotelUniqueId(item) || `hotel-${index}`)}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         />
