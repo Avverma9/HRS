@@ -12,10 +12,10 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Dimensions,
+  Share,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getHotelById } from "../store/slices/hotelSlice";
 import {
@@ -28,11 +28,16 @@ import {
 } from "../store/slices/bookingSlice";
 import { getUserId } from "../utils/credentials";
 import { getAmenityDisplayName, getAmenityIconName } from "../utils/amenities";
+import {
+  getRoomFinalPrice as resolveRoomFinalPrice,
+  getRoomOriginalPrice as resolveRoomOriginalPrice,
+  isRoomOfferActive,
+} from "../utils/hotelOffers";
 import HotelDetailsSkeleton from "../components/skeleton/HotelDetailsSkeleton";
 import { useAppModal } from "../contexts/AppModalContext";
 
 /**
- * ✅ What this version fixes/does:
+ * âœ… What this version fixes/does:
  * 1) Modern UI (clean cards, chips, sections, better spacing)
  * 2) MonthlyPrice override:
  *    - monthlyData[] like:
@@ -40,7 +45,7 @@ import { useAppModal } from "../contexts/AppModalContext";
  *    - If user-selected date range overlaps entry range => room nightly price becomes monthPrice
  * 3) GST:
  *    - Uses hotel.gstConfig if enabled
- *    - If you still want server GST logic, it’s supported (getGstForHotelData)
+ *    - If you still want server GST logic, itâ€™s supported (getGstForHotelData)
  * 4) Foods section:
  *    - Automatically shows if hotel.basicInfo.foods OR hotel.foods OR hotel.menu exists
  *    - (You can map your real API shape inside `extractFoods`)
@@ -50,6 +55,45 @@ const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
 const MAX_GUESTS = 20;
 const MAX_ROOMS = 10;
 const MAX_GUESTS_PER_ROOM = 3;
+const PREVIEW_POLICY_COUNT = 3;
+const POLICY_EXCLUDED_KEYS = new Set([
+  "_id",
+  "__v",
+  "id",
+  "hotelId",
+  "createdAt",
+  "updatedAt",
+  "onDoubleSharing",
+  "onQuadSharing",
+  "onBulkBooking",
+  "onTrippleSharing",
+  "onMoreThanFour",
+  "offDoubleSharing",
+  "offQuadSharing",
+  "offBulkBooking",
+  "offTrippleSharing",
+  "offMoreThanFour",
+  "onDoubleSharingAp",
+  "onQuadSharingAp",
+  "onBulkBookingAp",
+  "onTrippleSharingAp",
+  "onMoreThanFourAp",
+  "onDoubleSharingMAp",
+  "onQuadSharingMAp",
+  "onBulkBookingMAp",
+  "onTrippleSharingMAp",
+  "onMoreThanFourMAp",
+  "offDoubleSharingAp",
+  "offQuadSharingAp",
+  "offBulkBookingAp",
+  "offTrippleSharingAp",
+  "offMoreThanFourAp",
+  "offDoubleSharingMAp",
+  "offQuadSharingMAp",
+  "offBulkBookingMAp",
+  "offTrippleSharingMAp",
+  "offMoreThanFourMAp",
+]);
 const getRequiredRoomsForGuests = (guests) => {
   const normalizedGuests = clamp(Number(guests) || 1, 1, MAX_GUESTS);
   return Math.max(1, Math.ceil(normalizedGuests / MAX_GUESTS_PER_ROOM));
@@ -256,7 +300,6 @@ const HotelDetails = ({ navigation, route }) => {
   const lastGstQueryRef = useRef(null);
   const couponRoomKeyRef = useRef(null);
   const [showAllAmenities, setShowAllAmenities] = useState(false);
-  const [showPoliciesModal, setShowPoliciesModal] = useState(false);
   const [couponCodeInput, setCouponCodeInput] = useState("");
   const [galleryModalVisible, setGalleryModalVisible] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -344,7 +387,7 @@ const HotelDetails = ({ navigation, route }) => {
     [getRoomAvailabilityMeta]
   );
 
-  // ✅ Monthly override picker (your monthlyData sample supported)
+  // âœ… Monthly override picker (your monthlyData sample supported)
   const pickMonthlyOverride = useCallback((data, roomId, inDate, outDate) => {
     if (!Array.isArray(data) || !roomId) return null;
 
@@ -372,14 +415,33 @@ const HotelDetails = ({ navigation, route }) => {
 
   const getRoomBasePrice = useCallback((room) => {
     const pricing = room?.pricing || {};
-    // basePrice: pre-tax, finalPrice: post-tax, price fallback
-    return (
+    const directBasePrice =
       parseNumber(pricing.basePrice) ||
-      parseNumber(pricing.finalPrice) ||
       parseNumber(pricing.price) ||
-      parseNumber(room?.price) ||
-      0
+      parseNumber(room?.price);
+
+    if (directBasePrice > 0) return directBasePrice;
+
+    // Some payloads only provide tax-inclusive `finalPrice`.
+    const finalPrice =
+      parseNumber(pricing.finalPrice) || parseNumber(room?.finalPrice);
+    const roomTaxPercent = parseNumber(
+      pricing.taxPercent ||
+        pricing.gstPercent ||
+        room?.taxPercent ||
+        room?.gstPercent,
     );
+    const roomTaxAmount = parseNumber(pricing.taxAmount || room?.taxAmount);
+
+    if (finalPrice > 0 && roomTaxPercent > 0) {
+      return finalPrice / (1 + roomTaxPercent / 100);
+    }
+
+    if (finalPrice > 0 && roomTaxAmount > 0 && finalPrice > roomTaxAmount) {
+      return finalPrice - roomTaxAmount;
+    }
+
+    return finalPrice > 0 ? finalPrice : 0;
   }, []);
 
   const nights = useMemo(() => {
@@ -389,10 +451,22 @@ const HotelDetails = ({ navigation, route }) => {
     return diff > 0 ? diff : 1;
   }, [checkInDate, checkOutDate]);
 
-  // ✅ Integrate hotelData response shapes
+  // âœ… Integrate hotelData response shapes
   const basicInfo = hotel?.basicInfo || {};
   const pricingOverview = hotel?.pricingOverview || {};
-  const policies = hotel?.policies || {};
+  const rawPolicies = hotel?.policies;
+  const policies = useMemo(() => {
+    if (Array.isArray(rawPolicies)) {
+      const firstObjectPolicy = rawPolicies.find(
+        (entry) => entry && typeof entry === "object" && !Array.isArray(entry),
+      );
+      return firstObjectPolicy || {};
+    }
+    if (rawPolicies && typeof rawPolicies === "object") {
+      return rawPolicies;
+    }
+    return {};
+  }, [rawPolicies]);
   const gstConfig = hotel?.gstConfig || null;
   const amenities = hotel?.amenities || [];
   const foods = useMemo(() => extractFoods(hotel), [hotel]);
@@ -408,7 +482,7 @@ const HotelDetails = ({ navigation, route }) => {
     return [];
   }, [monthlyData, hotel]);
 
-  const formatPolicyValue = (key, value) => {
+  const formatPolicyValue = useCallback((key, value) => {
     if (value === undefined || value === null || value === "") return null;
     if (typeof value === "boolean") {
       const lower = String(key).toLowerCase();
@@ -417,30 +491,75 @@ const HotelDetails = ({ navigation, route }) => {
       return value ? "Yes" : "No";
     }
     if (Array.isArray(value)) return value.join(", ");
-    return String(value);
-  };
+    if (typeof value === "object") return null;
+    const normalized = String(value).trim();
+    return normalized ? normalized : null;
+  }, []);
 
   const policyItems = useMemo(() => {
-    const restrictions = policies?.restrictions || {};
+    const restrictions =
+      policies?.restrictions && typeof policies.restrictions === "object"
+        ? policies.restrictions
+        : {};
+    const restrictionSource = { ...policies, ...restrictions };
+    const usedKeys = new Set();
+    const getPolicyValue = (keys = [], source = policies) => {
+      for (const key of keys) {
+        const value = formatPolicyValue(key, source?.[key]);
+        if (value) {
+          usedKeys.add(key);
+          return value;
+        }
+      }
+      return null;
+    };
+
+    const toPolicyLabel = (key) =>
+      String(key)
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+
+    const makeItem = ({ key, label, icon, value }) => {
+      if (!value) return null;
+      return {
+        key,
+        label,
+        icon,
+        value,
+        previewEligible: !value.includes("\n") && value.length <= 80,
+      };
+    };
+
     const candidates = [
-      { key: "checkIn", label: "Check-in Time", icon: "log-in-outline", source: policies },
-      { key: "checkOut", label: "Check-out Time", icon: "log-out-outline", source: policies },
-      { key: "unmarriedCouplesAllowed", label: "Unmarried Couples", icon: "heart-outline", source: policies },
-      { key: "idProofRequired", label: "ID Proof", icon: "card-outline", source: policies },
-      { key: "petsAllowed", label: "Pets", icon: "paw-outline", source: restrictions },
-      { key: "smokingAllowed", label: "Smoking", icon: "flame-outline", source: restrictions },
-      { key: "alcoholAllowed", label: "Alcohol", icon: "wine-outline", source: restrictions },
-      { key: "childPolicy", label: "Child Policy", icon: "people-outline", source: policies },
-      { key: "extraBed", label: "Extra Bed", icon: "bed-outline", source: policies },
-      { key: "cancellationText", label: "Cancellation", icon: "calendar-outline", source: policies },
-      { key: "ageRestriction", label: "Age Restriction", icon: "alert-circle-outline", source: policies },
+      { key: "checkIn", keys: ["checkIn", "checkInPolicy"], label: "Check-in Time", icon: "log-in-outline" },
+      { key: "checkOut", keys: ["checkOut", "checkOutPolicy"], label: "Check-out Time", icon: "log-out-outline" },
+      { key: "outsideFood", keys: ["outsideFoodPolicy"], label: "Outside Food", icon: "restaurant-outline" },
+      { key: "paymentMode", keys: ["paymentMode"], label: "Payment Mode", icon: "card-outline" },
+      { key: "unmarriedCouplesAllowed", keys: ["unmarriedCouplesAllowed"], label: "Unmarried Couples", icon: "heart-outline" },
+      { key: "bachelorAllowed", keys: ["bachelorAllowed"], label: "Bachelors", icon: "people-outline" },
+      { key: "internationalGuestAllowed", keys: ["internationalGuestAllowed"], label: "International Guests", icon: "globe-outline" },
+      { key: "petsAllowed", keys: ["petsAllowed"], label: "Pets", icon: "paw-outline", source: restrictionSource },
+      { key: "smokingAllowed", keys: ["smokingAllowed"], label: "Smoking", icon: "flame-outline", source: restrictionSource },
+      { key: "alcoholAllowed", keys: ["alcoholAllowed"], label: "Alcohol", icon: "wine-outline", source: restrictionSource },
+      { key: "idProofRequired", keys: ["idProofRequired"], label: "ID Proof", icon: "card-outline" },
+      { key: "childPolicy", keys: ["childPolicy"], label: "Child Policy", icon: "happy-outline" },
+      { key: "extraBed", keys: ["extraBed"], label: "Extra Bed", icon: "bed-outline" },
+      { key: "ageRestriction", keys: ["ageRestriction"], label: "Age Restriction", icon: "alert-circle-outline" },
+      { key: "hotelPolicy", keys: ["hotelsPolicy"], label: "Hotel Policy", icon: "document-text-outline" },
+      { key: "cancellation", keys: ["cancellationText", "cancellationPolicy"], label: "Cancellation Policy", icon: "calendar-outline" },
+      { key: "refund", keys: ["refundPolicy"], label: "Refund Policy", icon: "cash-outline" },
     ];
 
     const baseItems = candidates
-      .map((item) => {
-        const value = formatPolicyValue(item.key, item.source?.[item.key]);
-        return value ? { ...item, value } : null;
-      })
+      .map((item) =>
+        makeItem({
+          key: item.key,
+          label: item.label,
+          icon: item.icon,
+          value: getPolicyValue(item.keys, item.source || policies),
+        })
+      )
       .filter(Boolean);
 
     const rules = Array.isArray(policies?.rules) ? policies.rules : [];
@@ -449,12 +568,52 @@ const HotelDetails = ({ navigation, route }) => {
         key: "rules",
         label: "House Rules",
         icon: "list-outline",
-        value: rules.join(" • "),
+        value: rules.join(" | "),
+        previewEligible: false,
       });
     }
 
+    Object.entries(policies || {}).forEach(([key, value]) => {
+      if (usedKeys.has(key) || POLICY_EXCLUDED_KEYS.has(key) || key === "restrictions" || key === "rules") {
+        return;
+      }
+      const formattedValue = formatPolicyValue(key, value);
+      if (!formattedValue) return;
+      baseItems.push(
+        makeItem({
+          key,
+          label: toPolicyLabel(key),
+          icon: "document-text-outline",
+          value: formattedValue,
+        })
+      );
+    });
+
     return baseItems;
-  }, [policies]);
+  }, [policies, formatPolicyValue]);
+
+  const checkInPolicyValue = useMemo(
+    () => formatPolicyValue("checkIn", policies?.checkIn || policies?.checkInPolicy),
+    [policies, formatPolicyValue]
+  );
+  const checkOutPolicyValue = useMemo(
+    () => formatPolicyValue("checkOut", policies?.checkOut || policies?.checkOutPolicy),
+    [policies, formatPolicyValue]
+  );
+  const checkInChipText = useMemo(() => {
+    const value = String(checkInPolicyValue || "").trim();
+    if (!value) return null;
+    const lower = value.toLowerCase();
+    if (lower.includes("check in") || lower.includes("check-in")) return value;
+    return `Check-in ${value}`;
+  }, [checkInPolicyValue]);
+  const checkOutChipText = useMemo(() => {
+    const value = String(checkOutPolicyValue || "").trim();
+    if (!value) return null;
+    const lower = value.toLowerCase();
+    if (lower.includes("check out") || lower.includes("check-out")) return value;
+    return `Check-out ${value}`;
+  }, [checkOutPolicyValue]);
 
   const galleryImages = useMemo(() => toList(basicInfo?.images).filter(Boolean), [basicInfo?.images]);
   const mainImage = galleryImages[0];
@@ -502,18 +661,50 @@ const HotelDetails = ({ navigation, route }) => {
       );
 
       const basePrice = getRoomBasePrice(room);
+      const offerActive = isRoomOfferActive(room);
+      const offerFinalPrice = resolveRoomFinalPrice(room);
+      const offerOriginalPrice = resolveRoomOriginalPrice(room);
+      const effectiveBasePrice = offerFinalPrice > 0 ? offerFinalPrice : basePrice;
+      const effectiveOriginalPrice =
+        offerOriginalPrice > 0
+          ? offerOriginalPrice
+          : Math.max(basePrice, effectiveBasePrice, 0);
+      const offerDiscount = offerActive
+        ? Math.max(
+            parseNumber(room?.offerPriceLess),
+            Math.max(effectiveOriginalPrice - effectiveBasePrice, 0),
+          )
+        : 0;
+      const offerLabel = String(
+        room?.offerName ||
+          room?.features?.offerText ||
+          room?.features?.offerName ||
+          "Offer",
+      ).trim();
       const overridePrice = parseNumber(monthlyOverride?.monthPrice);
 
-      // ✅ If selected date overlaps, apply override monthPrice as nightly
-      const nightlyPrice = overridePrice > 0 ? overridePrice : basePrice;
+      // If selected date overlaps, apply override monthPrice as nightly.
+      const nightlyPrice = overridePrice > 0 ? overridePrice : effectiveBasePrice;
+      const isOverrideApplied = overridePrice > 0;
+      const showOfferPricing =
+        !isOverrideApplied &&
+        offerActive &&
+        effectiveOriginalPrice > nightlyPrice &&
+        offerDiscount > 0;
 
       return {
         ...room,
         __pricing: {
           basePrice,
+          effectiveBasePrice,
+          originalPrice: effectiveOriginalPrice,
           nightlyPrice,
           monthlyOverride,
-          isOverrideApplied: overridePrice > 0,
+          isOverrideApplied,
+          offerActive,
+          offerDiscount,
+          offerLabel,
+          showOfferPricing,
         },
       };
     });
@@ -555,9 +746,9 @@ const HotelDetails = ({ navigation, route }) => {
     pricingOverview?.currencySymbol ||
     selectedRoomData?.pricing?.currencySymbol ||
     selectedRoomData?.pricing?.currency ||
-    "₹";
+    "â‚¹";
 
-  // ✅ GST + Monthly pricing integrated
+  // âœ… GST + Monthly pricing integrated
   const pricing = useMemo(() => {
     if (!selectedRoomData) {
       return {
@@ -595,19 +786,19 @@ const HotelDetails = ({ navigation, route }) => {
       appliedTaxPercent = 12;
       gstTotal = (baseTotal * appliedTaxPercent) / 100;
       taxLabel = "GST (12%)";
-    } else if (gstData?.gstPrice) {
-      appliedTaxPercent = parseNumber(gstData.gstPrice);
-      gstTotal = (baseTotal * appliedTaxPercent) / 100;
-      taxLabel = `GST (${appliedTaxPercent}%)`;
-    } else if (gstConfig?.enabled && parseNumber(gstConfig?.rate) >= 0) {
-      appliedTaxPercent = parseNumber(gstConfig.rate);
+    } else if (roomTaxPercent > 0) {
+      appliedTaxPercent = roomTaxPercent;
       gstTotal = (baseTotal * appliedTaxPercent) / 100;
       taxLabel = `GST (${appliedTaxPercent}%)`;
     } else if (roomTaxAmount > 0) {
       gstTotal = roomTaxAmount * roomsCount * nights;
       taxLabel = "Taxes";
-    } else if (roomTaxPercent > 0) {
-      appliedTaxPercent = roomTaxPercent;
+    } else if (gstConfig?.enabled && parseNumber(gstConfig?.rate) >= 0) {
+      appliedTaxPercent = parseNumber(gstConfig.rate);
+      gstTotal = (baseTotal * appliedTaxPercent) / 100;
+      taxLabel = `GST (${appliedTaxPercent}%)`;
+    } else if (gstData?.gstPrice) {
+      appliedTaxPercent = parseNumber(gstData.gstPrice);
       gstTotal = (baseTotal * appliedTaxPercent) / 100;
       taxLabel = `GST (${appliedTaxPercent}%)`;
     } else {
@@ -650,6 +841,14 @@ const HotelDetails = ({ navigation, route }) => {
     couponResult,
   ]);
 
+  const getRoomOfferDisplayDiscount = useCallback((room, nightlyPrice) => {
+    const explicitDiscount = parseNumber(room?.__pricing?.offerDiscount);
+    if (explicitDiscount > 0) return explicitDiscount;
+
+    const originalPrice = parseNumber(room?.__pricing?.originalPrice);
+    return Math.max(originalPrice - parseNumber(nightlyPrice), 0);
+  }, []);
+
   // Optional: if you still want server GST data refresh based on perNight
   useEffect(() => {
     if (!pricing?.perNight) return;
@@ -660,12 +859,25 @@ const HotelDetails = ({ navigation, route }) => {
     dispatch(getGstForHotelData({ type: "Hotel", gstThreshold: pricing.perNight }));
   }, [dispatch, pricing?.perNight, gstData]);
 
+  const navigateToHomeScreen = useCallback(() => {
+    const parentNavigation = navigation?.getParent?.();
+    if (parentNavigation?.navigate) {
+      parentNavigation.navigate("Search", { screen: "Home" });
+      return;
+    }
+
+    navigation?.navigate?.("MainTabs", {
+      screen: "Search",
+      params: { screen: "Home" },
+    });
+  }, [navigation]);
+
   useEffect(() => {
     if (bookingStatus === "succeeded") {
       setBookingModalVisible(false);
       dispatch(resetBookingState());
       showSuccess("Success", "Booking Request Sent Successfully!", {
-        onPrimary: () => navigation.navigate("Home"),
+        onPrimary: navigateToHomeScreen,
       });
     }
     if (bookingStatus === "failed") {
@@ -675,7 +887,7 @@ const HotelDetails = ({ navigation, route }) => {
       );
       dispatch(resetBookingState());
     }
-  }, [bookingStatus, bookingError, dispatch, navigation, showError, showSuccess]);
+  }, [bookingStatus, bookingError, dispatch, navigateToHomeScreen, showError, showSuccess]);
 
   // Tab bar hidden via Tab Navigator options (App.js)
 
@@ -865,11 +1077,44 @@ const HotelDetails = ({ navigation, route }) => {
     if (navigation?.canGoBack?.()) {
       navigation.goBack();
     } else {
-      navigation.navigate("Home");
+      navigateToHomeScreen();
     }
   };
 
-  const topPadding = Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0;
+  const handleShareHotel = useCallback(async () => {
+    const name = String(basicInfo?.name || "Hotel Details").trim();
+    const address = [
+      basicInfo?.location?.address,
+      basicInfo?.location?.city,
+      basicInfo?.location?.state,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    const message = [name, address, mainImage].filter(Boolean).join("\n");
+
+    try {
+      await Share.share({ title: name, message });
+    } catch {
+      // no-op
+    }
+  }, [
+    basicInfo?.name,
+    basicInfo?.location?.address,
+    basicInfo?.location?.city,
+    basicInfo?.location?.state,
+    mainImage,
+  ]);
+
+  const handleViewAllPolicies = useCallback(() => {
+    navigation?.navigate?.("PolicyScreen", {
+      hotelName: basicInfo?.name || hotel?.hotelName || "Hotel",
+      policyItems,
+    });
+  }, [navigation, basicInfo?.name, hotel?.hotelName, policyItems]);
+
+  const statusBarTopPadding = Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0;
+  const heroActionTop = statusBarTopPadding + (Platform.OS === "android" ? 10 : 44);
 
   const safeAmenities = useMemo(() => {
     if (!amenities) return [];
@@ -890,7 +1135,13 @@ const HotelDetails = ({ navigation, route }) => {
     return rows;
   }, [amenitiesToShow]);
 
-  const previewPolicies = useMemo(() => policyItems.slice(0, 5), [policyItems]);
+  const previewPolicies = useMemo(() => {
+    const concisePolicies = policyItems.filter((item) => item?.previewEligible);
+    if (concisePolicies.length >= PREVIEW_POLICY_COUNT) {
+      return concisePolicies.slice(0, PREVIEW_POLICY_COUNT);
+    }
+    return policyItems.slice(0, PREVIEW_POLICY_COUNT);
+  }, [policyItems]);
 
   if (loading) {
     return <HotelDetailsSkeleton />;
@@ -923,6 +1174,25 @@ const HotelDetails = ({ navigation, route }) => {
                 <Ionicons name="image-outline" size={40} color="#94a3b8" />
               </View>
             )}
+          </View>
+          <View
+            className="absolute left-0 right-0 z-20 flex-row items-center justify-between px-4"
+            style={{ top: heroActionTop }}
+          >
+            <TouchableOpacity
+              onPress={handleGoBack}
+              className="w-10 h-10 rounded-full bg-black/35 items-center justify-center border border-white/20"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="arrow-back" size={20} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleShareHotel}
+              className="w-10 h-10 rounded-full bg-black/35 items-center justify-center border border-white/20"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="share-outline" size={20} color="#ffffff" />
+            </TouchableOpacity>
           </View>
 
           {!!otherImages.length && (
@@ -975,33 +1245,55 @@ const HotelDetails = ({ navigation, route }) => {
               </View>
             </View>
 
-            <View className="flex-row flex-wrap gap-2 mt-4">
-              {!!pricingOverview?.lowestBasePrice && (
-                <Chip
-                  tone="info"
-                  icon={<Ionicons name="pricetag-outline" size={14} color="#0d3b8f" />}
-                  text={`From ${currencySymbol}${parseNumber(pricingOverview.lowestBasePrice).toLocaleString()}`}
-                />
+            <View className="mt-4" style={{ gap: 8 }}>
+              {!!checkInChipText && !!checkOutChipText ? (
+                <View className="flex-row" style={{ gap: 8 }}>
+                  <View className="flex-1">
+                    <Chip
+                      icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
+                      text={checkInChipText}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Chip
+                      icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
+                      text={checkOutChipText}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+                  {!!checkInChipText && (
+                    <Chip
+                      icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
+                      text={checkInChipText}
+                    />
+                  )}
+                  {!!checkOutChipText && (
+                    <Chip
+                      icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
+                      text={checkOutChipText}
+                    />
+                  )}
+                </View>
               )}
-              {!!policies?.checkIn && (
-                <Chip
-                  icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
-                  text={`Check-in ${policies.checkIn}`}
-                />
-              )}
-              {!!policies?.checkOut && (
-                <Chip
-                  icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
-                  text={`Check-out ${policies.checkOut}`}
-                />
-              )}
-              {!!gstConfig?.enabled && (
-                <Chip
-                  tone="success"
-                  icon={<Ionicons name="receipt-outline" size={14} color="#047857" />}
-                  text={`GST Enabled (${parseNumber(gstConfig.rate)}%)`}
-                />
-              )}
+
+              <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+                {!!pricingOverview?.lowestBasePrice && (
+                  <Chip
+                    tone="info"
+                    icon={<Ionicons name="pricetag-outline" size={14} color="#0d3b8f" />}
+                    text={`From ${currencySymbol}${parseNumber(pricingOverview.lowestBasePrice).toLocaleString()}`}
+                  />
+                )}
+                {!!gstConfig?.enabled && (
+                  <Chip
+                    tone="success"
+                    icon={<Ionicons name="receipt-outline" size={14} color="#047857" />}
+                    text={`GST Enabled (${parseNumber(gstConfig.rate)}%)`}
+                  />
+                )}
+              </View>
             </View>
           </View>
 
@@ -1330,6 +1622,15 @@ const HotelDetails = ({ navigation, route }) => {
                               </Text>
                             </View>
                           )}
+
+                          {!!room?.__pricing?.offerActive && (
+                            <View className="flex-row items-center px-2 py-0.5 rounded-full border bg-rose-50 border-rose-200">
+                              <Ionicons name="pricetag-outline" size={10} color="#e11d48" />
+                              <Text className="text-rose-700 text-[9px] font-bold ml-1" numberOfLines={1}>
+                                {room?.__pricing?.offerLabel || "Offer"}
+                              </Text>
+                            </View>
+                          )}
                         </View>
                       </View>
 
@@ -1338,6 +1639,22 @@ const HotelDetails = ({ navigation, route }) => {
                           <Text className="text-[16px] font-extrabold text-slate-900">
                             {currencySymbol}{Math.round(nightlyPrice).toLocaleString()}
                           </Text>
+                          {room?.__pricing?.showOfferPricing && (
+                            <View className="flex-row items-center mt-0.5">
+                              <Text className="text-[10px] font-bold text-slate-400 line-through">
+                                {currencySymbol}
+                                {Math.round(
+                                  parseNumber(room?.__pricing?.originalPrice),
+                                ).toLocaleString()}
+                              </Text>
+                              <Text className="text-[10px] font-black text-rose-600 ml-1.5">
+                                Save {currencySymbol}
+                                {Math.round(
+                                  getRoomOfferDisplayDiscount(room, nightlyPrice),
+                                ).toLocaleString()}
+                              </Text>
+                            </View>
+                          )}
                           <Text className="text-[9px] text-slate-400">
                             GST ({taxDisplay}) at checkout
                           </Text>
@@ -1451,14 +1768,14 @@ const HotelDetails = ({ navigation, route }) => {
                   </View>
                 ))
               )}
-              {policyItems.length > 5 && (
+              {policyItems.length > previewPolicies.length && (
                 <>
                   <View className="h-[1px] bg-slate-100 my-3" />
                   <TouchableOpacity
-                    onPress={() => setShowPoliciesModal(true)}
+                    onPress={handleViewAllPolicies}
                     className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
                   >
-                    <Text className="text-xs font-extrabold text-[#0d3b8f]">See Terms & Conditions</Text>
+                    <Text className="text-xs font-extrabold text-[#0d3b8f]">View All Policy</Text>
                     <Ionicons name="chevron-forward" size={14} color="#0d3b8f" />
                   </TouchableOpacity>
                 </>
@@ -1477,7 +1794,7 @@ const HotelDetails = ({ navigation, route }) => {
         <View className="flex-1 bg-black">
           <View
             className="absolute left-0 right-0 z-10 flex-row items-center justify-between px-4"
-            style={{ top: 12 + topPadding }}
+            style={{ top: 12 + statusBarTopPadding }}
           >
             <TouchableOpacity
               onPress={() => setGalleryModalVisible(false)}
@@ -1527,53 +1844,17 @@ const HotelDetails = ({ navigation, route }) => {
         </View>
       </Modal>
 
-      <Modal
-        animationType="slide"
-        visible={showPoliciesModal}
-        onRequestClose={() => setShowPoliciesModal(false)}
-      >
-        <SafeAreaView className="flex-1 bg-slate-50">
-          <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-200 bg-white">
-            <TouchableOpacity onPress={() => setShowPoliciesModal(false)} className="p-1">
-              <Ionicons name="chevron-back" size={22} color="#0f172a" />
-            </TouchableOpacity>
-            <Text className="text-base font-extrabold text-slate-900">Terms & Conditions</Text>
-            <View className="w-6" />
-          </View>
-
-          <ScrollView className="flex-1 px-5 pt-4">
-            <View className="bg-white rounded-[20px] p-4 border border-slate-100 shadow-sm">
-              {policyItems.map((item, idx) => (
-                <View key={`full-${item.key}-${idx}`}>
-                  <View className="flex-row items-start justify-between">
-                    <View className="flex-row items-center pr-2">
-                      <Ionicons name={item.icon} size={15} color="#64748b" />
-                      <Text className="text-xs font-bold text-slate-500 ml-2">{item.label}</Text>
-                    </View>
-                    <Text className="text-xs font-extrabold text-slate-900 ml-4 flex-1 text-right">
-                      {item.value}
-                    </Text>
-                  </View>
-                  {idx < policyItems.length - 1 && <View className="h-[1px] bg-slate-100 my-3" />}
-                </View>
-              ))}
-            </View>
-            <View className="h-6" />
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
       {/* Bottom Action Bar */}
       <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-5 py-4 flex-row items-center justify-between pb-8 shadow-lg z-10">
         <View>
           <Text className="text-slate-500 text-[10px] font-bold uppercase mb-0.5">
-            {roomsCount} Room • {guestsCount} Guest • {nights} Night
+            {roomsCount} room | {guestsCount} guest | {nights} night
           </Text>
           <Text className="text-2xl font-extrabold text-[#0d3b8f]">
             {currencySymbol}{Math.round(pricing.finalTotal).toLocaleString()}
           </Text>
           <Text className="text-[10px] text-slate-400 mt-1">
-            {pricing.taxLabel ? `${pricing.taxLabel} included in estimate` : "Taxes calculated"}
+            {`${currencySymbol}${Math.round(pricing.base).toLocaleString()} + ${currencySymbol}${Math.round(pricing.tax).toLocaleString()} tax`}
           </Text>
         </View>
 
@@ -1607,7 +1888,7 @@ const HotelDetails = ({ navigation, route }) => {
                   <View className="flex-1">
                     <Text className="font-extrabold text-slate-900 text-sm mb-1">{basicInfo?.name}</Text>
                     <Text className="text-slate-600 text-xs mb-1">
-                      {selectedRoomData?.name} • {roomsCount} room • {guestsCount} guest
+                      {selectedRoomData?.name} | {roomsCount} room | {guestsCount} guest
                     </Text>
                     <Text className="text-[#0d3b8f] font-extrabold text-xs">
                       {formatFullDate(checkInDate)} - {formatFullDate(checkOutDate)}
@@ -1794,3 +2075,4 @@ const HotelDetails = ({ navigation, route }) => {
 };
 
 export default HotelDetails;
+

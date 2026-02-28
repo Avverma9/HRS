@@ -7,6 +7,7 @@ const COMPLAINT_CREATE_PATHS = [
   "/create-a-complaint/on/hotel",
   "/api/create-a-complaint/on/hotel",
 ];
+const ALLOWED_REGARDING_VALUES = new Set(["booking", "hotel", "website"]);
 
 const normalizeComplaintResponse = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -123,18 +124,24 @@ export const createHotelComplaint = createAsyncThunk(
       const hotelEmail = String(input?.hotelEmail || "").trim();
       const bookingId = String(input?.bookingId || "").trim();
       const issue = String(input?.issue || "").trim();
-      const status = String(input?.status || "Pending").trim() || "Pending";
+      const status = String(input?.status || "").trim();
+      const regardingKey = regarding.toLowerCase();
 
       if (
         !resolvedUserId ||
         !hotelId ||
         !regarding ||
-        !hotelName ||
-        !hotelEmail ||
-        !bookingId ||
         !issue
       ) {
-        return rejectWithValue({ message: "Missing required fields." });
+        return rejectWithValue({
+          message: "Required fields: userId, hotelId, regarding, issue.",
+        });
+      }
+
+      if (!ALLOWED_REGARDING_VALUES.has(regardingKey)) {
+        return rejectWithValue({
+          message: "regarding must be one of: Booking, Hotel, Website.",
+        });
       }
 
       const images = Array.isArray(input?.images) ? input.images : [];
@@ -147,11 +154,11 @@ export const createHotelComplaint = createAsyncThunk(
         formData.append("userId", resolvedUserId);
         formData.append("hotelId", hotelId);
         formData.append("regarding", regarding);
-        formData.append("hotelName", hotelName);
-        formData.append("hotelEmail", hotelEmail);
-        formData.append("bookingId", bookingId);
         formData.append("issue", issue);
-        formData.append("status", status);
+        if (status) formData.append("status", status);
+        if (hotelName) formData.append("hotelName", hotelName);
+        if (hotelEmail) formData.append("hotelEmail", hotelEmail);
+        if (bookingId) formData.append("bookingId", bookingId);
         uploadFiles.forEach((file) => {
           formData.append("images", file);
         });
@@ -166,11 +173,11 @@ export const createHotelComplaint = createAsyncThunk(
         userId: resolvedUserId,
         hotelId,
         regarding,
-        hotelName,
-        hotelEmail,
-        bookingId,
         issue,
-        status,
+        ...(status ? { status } : {}),
+        ...(hotelName ? { hotelName } : {}),
+        ...(hotelEmail ? { hotelEmail } : {}),
+        ...(bookingId ? { bookingId } : {}),
       });
       return response?.data || null;
     } catch (error) {

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -8,6 +8,9 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Share,
+  StatusBar,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -466,6 +469,7 @@ export default function TourDetails({ navigation, route }) {
   const isCustomizable = normalizeBool(tour?.isCustomizable);
   const hasVehicleService = vehicles.length > 0 && allSeatLabels.length > 0;
   const hasLongOverview = overview.length > 240;
+  const heroActionTop = (Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0) + (Platform.OS === "android" ? 10 : 44);
   const termsEntries = useMemo(() => {
     if (!tour?.termsAndConditions || typeof tour.termsAndConditions !== "object") {
       return [];
@@ -655,6 +659,32 @@ export default function TourDetails({ navigation, route }) {
 
   const isTourLoading = selectedTourStatus === "loading" && !tour?._id;
   const isTourFailed = selectedTourStatus === "failed" && !tour?._id;
+  const handleGoBack = useCallback(() => {
+    if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate("Tour");
+  }, [navigation]);
+
+  const handleShareTour = useCallback(async () => {
+    const title = places || "Tour Details";
+    const message = [
+      title,
+      locationLabel ? `Location: ${locationLabel}` : "",
+      (days || nights) ? `${nights}N / ${days}D` : "",
+      startDateLabel && startDateLabel !== "-" ? `Start: ${startDateLabel}` : "",
+      tour?.images?.[0] || "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    try {
+      await Share.share({ title, message });
+    } catch {
+      // no-op
+    }
+  }, [days, locationLabel, nights, places, startDateLabel, tour?.images]);
 
   if (!tourId) return null;
 
@@ -695,6 +725,25 @@ export default function TourDetails({ navigation, route }) {
                     colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.85)']}
                     className="absolute inset-0"
                 />
+                <View
+                    className="absolute left-0 right-0 z-20 flex-row items-center justify-between px-4"
+                    style={{ top: heroActionTop }}
+                >
+                    <TouchableOpacity
+                        onPress={handleGoBack}
+                        className="w-10 h-10 rounded-full bg-black/35 items-center justify-center border border-white/20"
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="arrow-back" size={20} color="#ffffff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={handleShareTour}
+                        className="w-10 h-10 rounded-full bg-black/35 items-center justify-center border border-white/20"
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="share-outline" size={20} color="#ffffff" />
+                    </TouchableOpacity>
+                </View>
 
                 {/* Hero Content - Compact & Modern */}
                 <View className="absolute bottom-0 left-0 right-0 p-6 pb-12">
@@ -1361,3 +1410,9 @@ export default function TourDetails({ navigation, route }) {
     </View>
   );
 }
+
+
+
+
+
+

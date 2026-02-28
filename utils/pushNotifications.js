@@ -1,19 +1,44 @@
 import { Platform } from "react-native";
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import api from "./api";
 
 const DEFAULT_ANDROID_CHANNEL_ID = "default";
+let notificationsModulePromise = null;
+let isNotificationHandlerConfigured = false;
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+const getNotificationsModule = async () => {
+  if (!notificationsModulePromise) {
+    notificationsModulePromise = import("expo-notifications");
+  }
+
+  const Notifications = await notificationsModulePromise;
+  return Notifications?.default || Notifications;
+};
+
+export const isPushNotificationsSupported = () => {
+  const executionEnvironment = Constants?.executionEnvironment;
+  const isExpoGo = executionEnvironment === "storeClient";
+  return !(Platform.OS === "android" && isExpoGo);
+};
+
+const ensureNotificationHandler = async () => {
+  if (isNotificationHandlerConfigured || !isPushNotificationsSupported()) {
+    return;
+  }
+
+  const Notifications = await getNotificationsModule();
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+
+  isNotificationHandlerConfigured = true;
+};
 
 const resolveExpoProjectId = () => {
   return (
@@ -24,7 +49,9 @@ const resolveExpoProjectId = () => {
 };
 
 export const ensureAndroidNotificationChannel = async () => {
-  if (Platform.OS !== "android") return;
+  if (Platform.OS !== "android" || !isPushNotificationsSupported()) return;
+
+  const Notifications = await getNotificationsModule();
 
   await Notifications.setNotificationChannelAsync(DEFAULT_ANDROID_CHANNEL_ID, {
     name: "Default",
@@ -36,11 +63,14 @@ export const ensureAndroidNotificationChannel = async () => {
 };
 
 export const registerForPushNotificationsAsync = async () => {
-  if (!Device.isDevice) {
+  if (!isPushNotificationsSupported() || !Device.isDevice) {
     return null;
   }
 
+  await ensureNotificationHandler();
   await ensureAndroidNotificationChannel();
+
+  const Notifications = await getNotificationsModule();
 
   const settings = await Notifications.getPermissionsAsync();
   let finalStatus = settings?.status;
@@ -60,6 +90,21 @@ export const registerForPushNotificationsAsync = async () => {
     : await Notifications.getExpoPushTokenAsync();
 
   return tokenResponse?.data || null;
+};
+
+export const addNotificationResponseListener = async (listener) => {
+  if (!isPushNotificationsSupported()) return null;
+
+  await ensureNotificationHandler();
+  const Notifications = await getNotificationsModule();
+  return Notifications.addNotificationResponseReceivedListener(listener);
+};
+
+export const getLastNotificationResponseAsync = async () => {
+  if (!isPushNotificationsSupported()) return null;
+
+  const Notifications = await getNotificationsModule();
+  return Notifications.getLastNotificationResponseAsync();
 };
 
 export const syncPushTokenWithServer = async ({ userId, pushToken }) => {

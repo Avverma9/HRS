@@ -379,7 +379,7 @@ export default function CabDetails({ navigation, route }) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right", "bottom"]}>
       <Header
         compact
         showHero={false}

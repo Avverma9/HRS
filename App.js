@@ -25,11 +25,13 @@ import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { AppModalProvider } from "./contexts/AppModalContext";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import * as ExpoNotifications from "expo-notifications";
 import ThemedStatusBar from "./components/ThemedStatusBar";
 import { requestStartupPermissionsIfNeeded } from "./utils/startupPermissions";
 import { baseURL } from "./utils/baseUrl";
 import {
+  addNotificationResponseListener,
+  getLastNotificationResponseAsync,
+  isPushNotificationsSupported,
   registerForPushNotificationsAsync,
   resolveNotificationRoute,
   syncPushTokenWithServer,
@@ -44,6 +46,7 @@ import Tour from "./screens/Tour";
 import TourDetails from "./screens/TourDetails";
 import Hotels from "./screens/Hotels";
 import HotelDetails from "./screens/HotelDetails";
+import PolicyScreen from "./screens/PolicyScreen";
 import CabDetails from "./screens/CabDetails.jsx";
 import NotificationsScreen from "./screens/Notifications";
 import Profile from "./screens/Profile";
@@ -165,6 +168,7 @@ function SearchStackNavigator() {
       <SearchStack.Screen name="Home" component={Home} />
       <SearchStack.Screen name="Hotels" component={Hotels} />
       <SearchStack.Screen name="HotelDetails" component={HotelDetails} />
+      <SearchStack.Screen name="PolicyScreen" component={PolicyScreen} />
     </SearchStack.Navigator>
   );
 }
@@ -178,6 +182,7 @@ function HotelStackNavigator() {
         initialParams={{ showAll: true }}
       />
       <HotelStack.Screen name="HotelDetails" component={HotelDetails} />
+      <HotelStack.Screen name="PolicyScreen" component={PolicyScreen} />
     </HotelStack.Navigator>
   );
 }
@@ -196,8 +201,9 @@ function TabNavigator() {
           return {
             title: "Home",
             tabBarLabel: "Home",
-            tabBarStyle:
-              routeName === "HotelDetails" ? { display: "none" } : undefined,
+            tabBarStyle: ["HotelDetails", "PolicyScreen"].includes(routeName)
+              ? { display: "none" }
+              : undefined,
           };
         }}
       />
@@ -209,8 +215,9 @@ function TabNavigator() {
           return {
             title: "Hotels",
             tabBarLabel: "Hotels",
-            tabBarStyle:
-              routeName === "HotelDetails" ? { display: "none" } : undefined,
+            tabBarStyle: ["HotelDetails", "PolicyScreen"].includes(routeName)
+              ? { display: "none" }
+              : undefined,
           };
         }}
       />
@@ -384,6 +391,10 @@ function HealthAwareNavigator() {
   }, [checkHealth]);
 
   useEffect(() => {
+    if (!isPushNotificationsSupported()) {
+      return undefined;
+    }
+
     let cancelled = false;
 
     const registerPush = async () => {
@@ -416,6 +427,12 @@ function HealthAwareNavigator() {
   }, [isSignedIn]);
 
   useEffect(() => {
+    if (!isPushNotificationsSupported()) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
     const navigateFromResponse = (response) => {
       const route = resolveNotificationRoute(response);
       if (!route?.name) return;
@@ -424,21 +441,30 @@ function HealthAwareNavigator() {
       }
     };
 
-    notificationResponseSubscriptionRef.current =
-      ExpoNotifications.addNotificationResponseReceivedListener(
-        navigateFromResponse,
-      );
+    const wireNotificationHandlers = async () => {
+      try {
+        const subscription =
+          await addNotificationResponseListener(navigateFromResponse);
+        if (cancelled) {
+          subscription?.remove?.();
+          return;
+        }
 
-    ExpoNotifications.getLastNotificationResponseAsync()
-      .then((response) => {
-        if (!response) return;
-        navigateFromResponse(response);
-      })
-      .catch(() => {
+        notificationResponseSubscriptionRef.current = subscription;
+
+        const response = await getLastNotificationResponseAsync();
+        if (!cancelled && response) {
+          navigateFromResponse(response);
+        }
+      } catch {
         // no-op
-      });
+      }
+    };
+
+    wireNotificationHandlers();
 
     return () => {
+      cancelled = true;
       notificationResponseSubscriptionRef.current?.remove?.();
       notificationResponseSubscriptionRef.current = null;
     };

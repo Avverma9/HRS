@@ -57,7 +57,7 @@ const BOOKING_STATUS_OPTIONS = [
   "Checked-out",
   "Cancelled",
 ];
-const COMPLAINT_REGARDING_OPTIONS = ["Booking", "Service", "Payment", "Staff"];
+const COMPLAINT_REGARDING_OPTIONS = ["Booking", "Hotel", "Website"];
 const INITIAL_COMPLAINT_FORM = {
   hotelId: "",
   regarding: "Booking",
@@ -222,6 +222,57 @@ const getCabDisplayName = (booking) => {
 };
 
 const sanitizeUserId = (value) => String(value || "").trim().replace(/[<>\s]/g, "");
+const normalizeText = (value) => String(value || "").trim();
+
+const resolveBookedHotelDetails = (booking) => {
+  if (!booking || typeof booking !== "object") return null;
+
+  const bookingIdCandidates = [
+    booking?.bookingId,
+    booking?.bookingID,
+    booking?.booking_id,
+    booking?.bookingCode,
+  ];
+  const hotelIdCandidates = [
+    booking?.hotelId,
+    booking?.hotelID,
+    booking?.hotel_id,
+    booking?.hotelDetails?.hotelId,
+    booking?.hotelDetails?.hotelID,
+    booking?.hotel?.hotelId,
+    booking?.hotel?.hotelID,
+  ];
+
+  const bookingId = bookingIdCandidates.map(normalizeText).find(Boolean) || "";
+  const hotelId = hotelIdCandidates.map(normalizeText).find(Boolean) || "";
+  if (!bookingId || !hotelId) return null;
+
+  const hotelName = [
+    booking?.hotelName,
+    booking?.hotelDetails?.hotelName,
+    booking?.hotelDetails?.name,
+    booking?.hotel?.hotelName,
+  ]
+    .map(normalizeText)
+    .find(Boolean) || "";
+  const hotelEmail = [
+    booking?.hotelEmail,
+    booking?.hotelDetails?.hotelEmail,
+    booking?.hotelDetails?.email,
+    booking?.hotel?.hotelEmail,
+    booking?.hotel?.email,
+  ]
+    .map(normalizeText)
+    .find(Boolean) || "";
+
+  return {
+    key: `${bookingId}::${hotelId}`,
+    bookingId,
+    hotelId,
+    hotelName,
+    hotelEmail,
+  };
+};
 
 const BookingCard = ({ item, onViewBooking }) => {
   const hotelName = item?.hotelDetails?.hotelName || "Hotel";
@@ -327,6 +378,7 @@ const Profile = ({ navigation }) => {
   const [showCreateComplaintModal, setShowCreateComplaintModal] = useState(false);
   const [complaintForm, setComplaintForm] = useState(INITIAL_COMPLAINT_FORM);
   const [complaintImages, setComplaintImages] = useState([]);
+  const [selectedComplaintBookingKey, setSelectedComplaintBookingKey] = useState("");
   const [chatMessage, setChatMessage] = useState("");
   const complaintChatScrollRef = useRef(null);
   const [storedUserId, setStoredUserId] = useState(null);
@@ -350,9 +402,10 @@ const Profile = ({ navigation }) => {
   // bookingSlice should store these keys (adjust if your slice uses different names)
   const bookingState = useSelector((state) => state.booking);
   const filteredBookingsEnvelope = bookingState?.filteredBookings || {};
-  const filteredBookings = Array.isArray(filteredBookingsEnvelope?.data)
-    ? filteredBookingsEnvelope.data
-    : [];
+  const filteredBookings = useMemo(
+    () => (Array.isArray(filteredBookingsEnvelope?.data) ? filteredBookingsEnvelope.data : []),
+    [filteredBookingsEnvelope?.data]
+  );
   const bookingLoading = bookingState?.filteredBookingsStatus === "loading";
   const bookingError = bookingState?.filteredBookingsError;
   const bookingPagination = filteredBookingsEnvelope?.pagination || null;
@@ -367,7 +420,10 @@ const Profile = ({ navigation }) => {
 
   const user = userState?.data || {};
   const coupons = toList(couponsState?.items);
-  const bookingHistory = toList(userState?.bookingData);
+  const bookingHistory = useMemo(
+    () => toList(userState?.bookingData),
+    [userState?.bookingData]
+  );
   const complaints = toList(complaintsState?.items);
   const isComplaintCreating = complaintsState?.createStatus === "loading";
 
@@ -388,6 +444,21 @@ const Profile = ({ navigation }) => {
         new Date(first?.timestamp || 0).getTime() - new Date(second?.timestamp || 0).getTime()
     );
   }, [selectedComplaint?.chats]);
+
+  const normalizedBookedHotels = useMemo(() => {
+    const source = [...filteredBookings, ...bookingHistory];
+    const uniqueMap = new Map();
+
+    source.forEach((booking) => {
+      const details = resolveBookedHotelDetails(booking);
+      if (!details) return;
+      if (!uniqueMap.has(details.key)) {
+        uniqueMap.set(details.key, details);
+      }
+    });
+
+    return Array.from(uniqueMap.values());
+  }, [filteredBookings, bookingHistory]);
 
   const userId = useMemo(
     () => {
@@ -442,6 +513,25 @@ const Profile = ({ navigation }) => {
     if (!userId) return;
     dispatch(fetchUserComplaints({ userId }));
   }, [dispatch, userId]);
+
+  useEffect(() => {
+    setSelectedComplaintBookingKey((prev) => {
+      if (!prev) return prev;
+      return normalizedBookedHotels.some((item) => item.key === prev) ? prev : "";
+    });
+  }, [normalizedBookedHotels]);
+
+  useEffect(() => {
+    if (!userId || activeTab !== "Complaints") return;
+    dispatch(
+      fetchFilteredBooking({
+        userId,
+        page: 1,
+        limit: 50,
+        selectedStatus: "All",
+      })
+    );
+  }, [dispatch, userId, activeTab]);
 
   useEffect(() => {
     if (!selectedComplaint) return;
@@ -610,15 +700,36 @@ const Profile = ({ navigation }) => {
   };
 
   const handleOpenCreateComplaintModal = () => {
-    setComplaintForm(INITIAL_COMPLAINT_FORM);
+    const primaryBookedHotel = normalizedBookedHotels[0] || null;
+    setSelectedComplaintBookingKey(primaryBookedHotel?.key || "");
+    setComplaintForm({
+      ...INITIAL_COMPLAINT_FORM,
+      hotelId: primaryBookedHotel?.hotelId || "",
+      hotelName: primaryBookedHotel?.hotelName || "",
+      hotelEmail: primaryBookedHotel?.hotelEmail || "",
+      bookingId: primaryBookedHotel?.bookingId || "",
+    });
     setComplaintImages([]);
     dispatch(resetCreateComplaintState());
     setShowCreateComplaintModal(true);
   };
 
+  const handleSelectComplaintBooking = (bookingDetails) => {
+    if (!bookingDetails) return;
+    setSelectedComplaintBookingKey(bookingDetails.key || "");
+    setComplaintForm((prev) => ({
+      ...prev,
+      hotelId: bookingDetails.hotelId || "",
+      hotelName: bookingDetails.hotelName || "",
+      hotelEmail: bookingDetails.hotelEmail || prev.hotelEmail || "",
+      bookingId: bookingDetails.bookingId || "",
+    }));
+  };
+
   const handleCloseCreateComplaintModal = () => {
     if (isComplaintCreating) return;
     setShowCreateComplaintModal(false);
+    setSelectedComplaintBookingKey("");
   };
 
   const handlePickComplaintImages = async () => {
@@ -664,7 +775,6 @@ const Profile = ({ navigation }) => {
           hotelEmail: complaintForm.hotelEmail?.trim(),
           bookingId: complaintForm.bookingId?.trim(),
           issue: complaintForm.issue?.trim(),
-          status: "Pending",
           images: complaintImages,
         })
       ).unwrap();
@@ -672,6 +782,7 @@ const Profile = ({ navigation }) => {
       setShowCreateComplaintModal(false);
       setComplaintForm(INITIAL_COMPLAINT_FORM);
       setComplaintImages([]);
+      setSelectedComplaintBookingKey("");
       dispatch(resetCreateComplaintState());
       dispatch(fetchUserComplaints({ userId }));
     } catch {
@@ -1412,28 +1523,71 @@ const renderCoupons = () => (
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false}>
+                {!!normalizedBookedHotels.length && (
+                  <View className="mb-3">
+                    <Text className="text-[11px] font-bold text-slate-600 mb-1">Your Booked Hotels</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ paddingRight: 4 }}
+                    >
+                      {normalizedBookedHotels.map((details) => {
+                        const active = selectedComplaintBookingKey === details.key;
+                        return (
+                          <TouchableOpacity
+                            key={details.key}
+                            onPress={() => handleSelectComplaintBooking(details)}
+                            className={`mr-2 px-3 py-2 rounded-xl border min-w-[170px] ${
+                              active ? "bg-blue-50 border-blue-500" : "bg-white border-slate-200"
+                            }`}
+                          >
+                            <Text className={`text-[11px] font-black ${active ? "text-blue-700" : "text-slate-700"}`}>
+                              {details.bookingId}
+                            </Text>
+                            <Text className="text-[10px] text-slate-500 mt-0.5" numberOfLines={1}>
+                              Hotel ID: {details.hotelId}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                    <Text className="text-[10px] text-slate-400 mt-1">
+                      Booking select karne par Booking ID aur Hotel ID auto-fill ho jayega.
+                    </Text>
+                  </View>
+                )}
+
                 <Text className="text-[11px] font-bold text-slate-600 mb-1">Hotel ID</Text>
                 <TextInput
                   value={complaintForm.hotelId}
-                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, hotelId: text }))}
+                  onChangeText={(text) => {
+                    setSelectedComplaintBookingKey("");
+                    setComplaintForm((prev) => ({ ...prev, hotelId: text }));
+                  }}
                   placeholder="67b0f53a7a0a3d4ec1234567"
                   placeholderTextColor="#94a3b8"
                   className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900"
                 />
 
-                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Hotel Name</Text>
+                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Hotel Name (Optional)</Text>
                 <TextInput
                   value={complaintForm.hotelName}
-                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, hotelName: text }))}
+                  onChangeText={(text) => {
+                    setSelectedComplaintBookingKey("");
+                    setComplaintForm((prev) => ({ ...prev, hotelName: text }));
+                  }}
                   placeholder="Hotel Blue Star"
                   placeholderTextColor="#94a3b8"
                   className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900"
                 />
 
-                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Hotel Email</Text>
+                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Hotel Email (Optional)</Text>
                 <TextInput
                   value={complaintForm.hotelEmail}
-                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, hotelEmail: text }))}
+                  onChangeText={(text) => {
+                    setSelectedComplaintBookingKey("");
+                    setComplaintForm((prev) => ({ ...prev, hotelEmail: text }));
+                  }}
                   placeholder="support@hotel.com"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -1441,10 +1595,13 @@ const renderCoupons = () => (
                   className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900"
                 />
 
-                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Booking ID</Text>
+                <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Booking ID (Optional)</Text>
                 <TextInput
                   value={complaintForm.bookingId}
-                  onChangeText={(text) => setComplaintForm((prev) => ({ ...prev, bookingId: text }))}
+                  onChangeText={(text) => {
+                    setSelectedComplaintBookingKey("");
+                    setComplaintForm((prev) => ({ ...prev, bookingId: text }));
+                  }}
                   placeholder="BK-90211"
                   placeholderTextColor="#94a3b8"
                   className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900"
@@ -1469,6 +1626,9 @@ const renderCoupons = () => (
                     );
                   })}
                 </View>
+                <Text className="text-[10px] text-slate-400 mt-1">
+                  Allowed: Booking / Hotel / Website
+                </Text>
 
                 <Text className="text-[11px] font-bold text-slate-600 mt-3 mb-1">Issue</Text>
                 <TextInput
@@ -1512,6 +1672,7 @@ const renderCoupons = () => (
                     </View>
                   )}
                 </View>
+                <Text className="text-[10px] text-slate-400 mt-1">Images (Optional)</Text>
               </ScrollView>
 
               <View className="mt-4 flex-row">

@@ -457,12 +457,17 @@ const Hotels = ({ navigation, route }) => {
                 <Text className="text-[8px] font-black tracking-wider text-slate-400">
                   STARTING FROM
                 </Text>
-                <Text
-                  className="text-[18px] leading-[20px] font-black text-[#0d3b8f]"
-                  numberOfLines={1}
-                >
-                  {`\u20B9${Math.round(displayFinalPrice).toLocaleString("en-IN")}`}
-                </Text>
+                <View className="flex-row items-end">
+                  <Text
+                    className="text-[18px] leading-[20px] font-black text-[#0d3b8f]"
+                    numberOfLines={1}
+                  >
+                    {`\u20B9${Math.round(displayFinalPrice).toLocaleString("en-IN")}`}
+                  </Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 ml-1 mb-[1px]">
+                    / night
+                  </Text>
+                </View>
                 {hasOffer && displayOriginalPrice > displayFinalPrice && (
                   <View className="flex-row items-center mt-[1px]">
                     <Text className="text-[10px] font-bold text-slate-400 line-through">
@@ -485,9 +490,6 @@ const Hotels = ({ navigation, route }) => {
                     {offerSummary.offerName}
                   </Text>
                 )}
-                <Text className="text-[10px] font-semibold text-slate-500 mt-[-1px]">
-                  / night
-                </Text>
               </View>
 
               <TouchableOpacity
