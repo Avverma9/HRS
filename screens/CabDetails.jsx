@@ -23,6 +23,7 @@ import {
 } from "../store/slices/cabSlice";
 import { useAppModal } from "../contexts/AppModalContext";
 import { getUserId } from "../utils/credentials";
+import Header from "../components/Header";
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -379,22 +380,16 @@ export default function CabDetails({ navigation, route }) {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
+      <Header
+        compact
+        showHero={false}
+        showBack
+        showNotification={false}
+        leftTitle="Cab Details"
+        onBackPress={() => navigation.goBack()}
+      />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
-        <View className="bg-[#0d3b8f] px-4 pt-2 pb-5 rounded-b-[26px]">
-          <View className="flex-row items-center justify-between">
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              className="h-9 w-9 rounded-full bg-white/15 items-center justify-center border border-white/20"
-              activeOpacity={0.85}
-            >
-              <Ionicons name="arrow-back" size={18} color="#ffffff" />
-            </TouchableOpacity>
-            <Text className="text-[16px] font-black text-white">Cab Details</Text>
-            <View className="w-9" />
-          </View>
-        </View>
-
-        <View className="-mt-3 mx-4 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        <View className="mt-3 mx-4 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
           <View className="h-[200px] bg-slate-200">
             <Image
               source={{ uri: cab?.images?.[0] || "https://via.placeholder.com/800x500?text=Cab" }}

@@ -1,6 +1,12 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../utils/api";
 
+const extractHotelList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
 // Define the async thunk
 export const searchHotel = createAsyncThunk(
   "hotel/searchHotel",
@@ -44,20 +50,55 @@ export const searchHotel = createAsyncThunk(
       // Extract the error message from the error object
       return rejectWithValue(error.response?.data?.message || error.message);
     }
-  }
+  },
 );
-
 
 export const frontHotels = createAsyncThunk(
   "hotel/frontHotels",
-  async (_, { rejectWithValue }) => { 
+  async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get("/get/offers/main/hotels");
-      return response.data;
+      const response = await api.get("/hotels/with-active-offers");
+      const offersList = extractHotelList(response?.data);
+      if (offersList.length > 0) {
+        return response.data;
+      }
+
+      // If new endpoint is empty, fallback to previous offers API first.
+      const fallbackResponse = await api.get("/get/offers/main/hotels");
+      const fallbackList = extractHotelList(fallbackResponse?.data);
+      if (fallbackList.length > 0) {
+        return fallbackResponse.data;
+      }
+
+      const listingResponse = await api.get("/hotels/filters?page=1&limit=10");
+      return listingResponse.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      try {
+        // Primary fallback: previous offers API.
+        const fallbackResponse = await api.get("/get/offers/main/hotels");
+        const fallbackList = extractHotelList(fallbackResponse?.data);
+        if (fallbackList.length > 0) {
+          return fallbackResponse.data;
+        }
+      } catch {
+        // continue to generic listing fallback
+      }
+
+      try {
+        const listingResponse = await api.get(
+          "/hotels/filters?page=1&limit=10",
+        );
+        return listingResponse.data;
+      } catch (fallbackError) {
+        return rejectWithValue(
+          fallbackError.response?.data?.message ||
+            error.response?.data?.message ||
+            fallbackError.message ||
+            error.message,
+        );
+      }
     }
-  }
+  },
 );
 
 export const getHotelById = createAsyncThunk(
@@ -69,9 +110,9 @@ export const getHotelById = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message);
     }
-  }
+  },
 );
-  
+
 // Create the slice
 const hotelSlice = createSlice({
   name: "hotel",
@@ -116,7 +157,7 @@ const hotelSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       // --- Featured/Front Hotels Cases ---
       .addCase(frontHotels.pending, (state) => {
         state.featuredLoading = true;

@@ -925,26 +925,6 @@ const HotelDetails = ({ navigation, route }) => {
             )}
           </View>
 
-          {/* Top bar */}
-          <View
-            className="absolute left-0 right-0 flex-row items-center justify-between px-4"
-            style={{ top: 12 + topPadding }}
-          >
-            <TouchableOpacity
-              onPress={handleGoBack}
-              className="w-10 h-10 bg-black/40 rounded-full items-center justify-center border border-white/20"
-            >
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-
-            <View className="bg-black/40 px-3 py-2 rounded-full border border-white/20 flex-row items-center">
-              <Ionicons name="star" size={14} color="white" />
-              <Text className="text-white font-extrabold ml-2 text-xs">
-                {basicInfo?.starRating || 0}
-              </Text>
-            </View>
-          </View>
-
           {!!otherImages.length && (
             <ScrollView
               horizontal

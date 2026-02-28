@@ -1,45 +1,63 @@
-import './global.css';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { navigationRef } from './utils/navigation';
-import { Provider, useDispatch } from 'react-redux';
-import { resetAppState, store } from './store';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Text, View, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext';
-import { AppModalProvider } from './contexts/AppModalContext';
-import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
-import ThemedStatusBar from './components/ThemedStatusBar';
-import { requestStartupPermissionsIfNeeded } from './utils/startupPermissions';
-import { baseURL } from './utils/baseUrl';
+import "./global.css";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  NavigationContainer,
+  getFocusedRouteNameFromRoute,
+} from "@react-navigation/native";
+import { navigationRef } from "./utils/navigation";
+import { Provider, useDispatch } from "react-redux";
+import { resetAppState, store } from "./store";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import {
+  Text,
+  View,
+  ActivityIndicator,
+  Platform,
+  TouchableOpacity,
+} from "react-native";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
+import { AppModalProvider } from "./contexts/AppModalContext";
+import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import * as ExpoNotifications from "expo-notifications";
+import ThemedStatusBar from "./components/ThemedStatusBar";
+import { requestStartupPermissionsIfNeeded } from "./utils/startupPermissions";
+import { baseURL } from "./utils/baseUrl";
+import {
+  registerForPushNotificationsAsync,
+  resolveNotificationRoute,
+  syncPushTokenWithServer,
+} from "./utils/pushNotifications";
 
-import BootScreen from './screens/BootScreen';
-import LoginPage from './screens/LoginRN';
-import RegisterPage from './screens/Register';
-import Home from './screens/Home';
-import Cabs from './screens/Cabs';
-import Tour from './screens/Tour';
-import TourDetails from './screens/TourDetails';
-import Hotels from './screens/Hotels';
-import HotelDetails from './screens/HotelDetails';
-import CabDetails from './screens/CabDetails.jsx';
-import Notifications from './screens/Notifications';
-import Profile from './screens/Profile';
-import ServerUnavailable from './screens/ServerUnavailable';
-import { fetchLocation } from './store/slices/locationSlice';
-import { searchHotel, frontHotels } from './store/slices/hotelSlice';
-import { getBeds, getRooms } from './store/slices/additionalSlice';
-import { fetchProfileData } from './store/slices/userSlice';
-import { fetchUserCoupons } from './store/slices/couponSlice';
-import { fetchFilteredBooking } from './store/slices/bookingSlice';
-import { fetchUserComplaints } from './store/slices/complaintSlice';
-import { fetchAllCabs } from './store/slices/cabSlice';
-import { fetchTourList, fetchUserTourBookings } from './store/slices/tourSlice';
-import { getUserId } from './utils/credentials';
+import BootScreen from "./screens/BootScreen";
+import LoginPage from "./screens/LoginRN";
+import RegisterPage from "./screens/Register";
+import Home from "./screens/Home";
+import Cabs from "./screens/Cabs";
+import Tour from "./screens/Tour";
+import TourDetails from "./screens/TourDetails";
+import Hotels from "./screens/Hotels";
+import HotelDetails from "./screens/HotelDetails";
+import CabDetails from "./screens/CabDetails.jsx";
+import NotificationsScreen from "./screens/Notifications";
+import Profile from "./screens/Profile";
+import ServerUnavailable from "./screens/ServerUnavailable";
+import { fetchLocation } from "./store/slices/locationSlice";
+import { searchHotel, frontHotels } from "./store/slices/hotelSlice";
+import { getBeds, getRooms } from "./store/slices/additionalSlice";
+import { fetchProfileData } from "./store/slices/userSlice";
+import { fetchUserCoupons } from "./store/slices/couponSlice";
+import { fetchFilteredBooking } from "./store/slices/bookingSlice";
+import { fetchUserComplaints } from "./store/slices/complaintSlice";
+import { fetchAllCabs } from "./store/slices/cabSlice";
+import { fetchTourList, fetchUserTourBookings } from "./store/slices/tourSlice";
+import { getUserId } from "./utils/credentials";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -56,25 +74,28 @@ function TabBar({ state, descriptors, navigation }) {
   if (!state?.routes || !descriptors) return null;
 
   const focusedOptions = descriptors[state.routes[state.index].key]?.options;
-  if (focusedOptions?.tabBarStyle?.display === 'none' || focusedOptions?.tabBarVisible === false) {
+  if (
+    focusedOptions?.tabBarStyle?.display === "none" ||
+    focusedOptions?.tabBarVisible === false
+  ) {
     return null;
   }
-  
+
   return (
-    <View 
+    <View
       className="bg-white border-t border-gray-200"
-      style={{ paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8 }}
+      style={{ paddingBottom: Platform.OS === "ios" ? insets.bottom : 8 }}
     >
       <View className="flex-row justify-around items-center h-16 px-2">
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           let label = options.tabBarLabel ?? options.title ?? route.name;
-          if (route.name === 'Search') label = 'Home';
+          if (route.name === "Search") label = "Home";
           const isFocused = state.index === index;
 
           const onPress = () => {
             const event = navigation.emit({
-              type: 'tabPress',
+              type: "tabPress",
               target: route.key,
               canPreventDefault: true,
             });
@@ -84,18 +105,28 @@ function TabBar({ state, descriptors, navigation }) {
           };
 
           const onLongPress = () => {
-            navigation.emit({ type: 'tabLongPress', target: route.key });
+            navigation.emit({ type: "tabLongPress", target: route.key });
           };
 
-          const color = isFocused ? '#0d3b8f' : '#64748b'; 
-          const size = 26; 
+          const color = isFocused ? "#0d3b8f" : "#64748b";
+          const size = 26;
           let iconName = "alert-circle";
           switch (route.name) {
-            case 'Search': iconName = isFocused ? "home" : "home-outline"; break; // home icon
-            case 'HotelsTab': iconName = isFocused ? "bed" : "bed-outline"; break;
-            case 'Cabs': iconName = isFocused ? "car" : "car-outline"; break;
-            case 'Tour': iconName = isFocused ? "map" : "map-outline"; break;
-            case 'Profile': iconName = isFocused ? "person-circle" : "person-circle-outline"; break;
+            case "Search":
+              iconName = isFocused ? "home" : "home-outline";
+              break; // home icon
+            case "HotelsTab":
+              iconName = isFocused ? "bed" : "bed-outline";
+              break;
+            case "Cabs":
+              iconName = isFocused ? "car" : "car-outline";
+              break;
+            case "Tour":
+              iconName = isFocused ? "map" : "map-outline";
+              break;
+            case "Profile":
+              iconName = isFocused ? "person-circle" : "person-circle-outline";
+              break;
           }
 
           return (
@@ -112,7 +143,7 @@ function TabBar({ state, descriptors, navigation }) {
             >
               <View className="items-center">
                 <Ionicons name={iconName} size={size} color={color} />
-                <Text 
+                <Text
                   style={{ color }}
                   className="text-[10px] font-medium mt-1"
                   numberOfLines={1}
@@ -141,7 +172,11 @@ function SearchStackNavigator() {
 function HotelStackNavigator() {
   return (
     <HotelStack.Navigator screenOptions={{ headerShown: false }}>
-      <HotelStack.Screen name="Hotels" component={Hotels} initialParams={{ showAll: true }} />
+      <HotelStack.Screen
+        name="Hotels"
+        component={Hotels}
+        initialParams={{ showAll: true }}
+      />
       <HotelStack.Screen name="HotelDetails" component={HotelDetails} />
     </HotelStack.Navigator>
   );
@@ -159,9 +194,10 @@ function TabNavigator() {
         options={({ route }) => {
           const routeName = getFocusedRouteNameFromRoute(route) ?? "Home";
           return {
-            title: 'Home',
-            tabBarLabel: 'Home',
-            tabBarStyle: routeName === "HotelDetails" ? { display: "none" } : undefined,
+            title: "Home",
+            tabBarLabel: "Home",
+            tabBarStyle:
+              routeName === "HotelDetails" ? { display: "none" } : undefined,
           };
         }}
       />
@@ -171,22 +207,34 @@ function TabNavigator() {
         options={({ route }) => {
           const routeName = getFocusedRouteNameFromRoute(route) ?? "Hotels";
           return {
-            title: 'Hotels',
-            tabBarLabel: 'Hotels',
-            tabBarStyle: routeName === "HotelDetails" ? { display: "none" } : undefined,
+            title: "Hotels",
+            tabBarLabel: "Hotels",
+            tabBarStyle:
+              routeName === "HotelDetails" ? { display: "none" } : undefined,
           };
         }}
       />
-      <Tab.Screen name="Cabs" component={Cabs} options={{ title: 'Cabs' }} />
-      <Tab.Screen name="Tour" component={Tour} options={{ title: 'Tours' }} />
-      <Tab.Screen name="Profile" component={Profile} options={{ title: 'Profile' }} />
+      <Tab.Screen name="Cabs" component={Cabs} options={{ title: "Cabs" }} />
+      <Tab.Screen name="Tour" component={Tour} options={{ title: "Tours" }} />
+      <Tab.Screen
+        name="Profile"
+        component={Profile}
+        options={{ title: "Profile" }}
+      />
     </Tab.Navigator>
   );
 }
 
 function LoadingScreen() {
   return (
-    <View style={{flex:1,justifyContent:'center',alignItems:'center',backgroundColor:'#fff'}}>
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#fff",
+      }}
+    >
       <ActivityIndicator size="large" color="#0d3b8f" />
     </View>
   );
@@ -216,7 +264,7 @@ function RootNavigator() {
   }, [showBoot]);
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: "fade" }}>
       {showBoot ? (
         <Stack.Screen name="Boot" component={BootScreen} />
       ) : isSignedIn === null ? (
@@ -224,7 +272,7 @@ function RootNavigator() {
       ) : isSignedIn ? (
         <>
           <Stack.Screen name="MainTabs" component={TabNavigator} />
-          <Stack.Screen name="Notifications" component={Notifications} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="TourDetails" component={TourDetails} />
           <Stack.Screen name="CabDetails" component={CabDetails} />
         </>
@@ -248,6 +296,8 @@ function HealthAwareNavigator() {
 
   const wasServerDownRef = useRef(false);
   const mountedRef = useRef(true);
+  const pushTokenSyncedUserRef = useRef("");
+  const notificationResponseSubscriptionRef = useRef(null);
 
   const refetchGlobalData = useCallback(async () => {
     dispatch(fetchLocation());
@@ -316,7 +366,7 @@ function HealthAwareNavigator() {
         }
       }
     },
-    [handleServerRecovered]
+    [handleServerRecovered],
   );
 
   useEffect(() => {
@@ -332,6 +382,67 @@ function HealthAwareNavigator() {
       clearInterval(intervalId);
     };
   }, [checkHealth]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const registerPush = async () => {
+      if (!isSignedIn) {
+        pushTokenSyncedUserRef.current = "";
+        return;
+      }
+
+      try {
+        const userId = await getUserId();
+        if (!userId || cancelled) return;
+        if (pushTokenSyncedUserRef.current === String(userId)) return;
+
+        const pushToken = await registerForPushNotificationsAsync();
+        if (!pushToken || cancelled) return;
+
+        await syncPushTokenWithServer({ userId, pushToken });
+        if (!cancelled) {
+          pushTokenSyncedUserRef.current = String(userId);
+        }
+      } catch {
+        // Keep app flow unaffected if push setup fails.
+      }
+    };
+
+    registerPush();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    const navigateFromResponse = (response) => {
+      const route = resolveNotificationRoute(response);
+      if (!route?.name) return;
+      if (navigationRef.isReady()) {
+        navigationRef.navigate(route.name, route.params);
+      }
+    };
+
+    notificationResponseSubscriptionRef.current =
+      ExpoNotifications.addNotificationResponseReceivedListener(
+        navigateFromResponse,
+      );
+
+    ExpoNotifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (!response) return;
+        navigateFromResponse(response);
+      })
+      .catch(() => {
+        // no-op
+      });
+
+    return () => {
+      notificationResponseSubscriptionRef.current?.remove?.();
+      notificationResponseSubscriptionRef.current = null;
+    };
+  }, []);
 
   if (healthStatus === "down") {
     return (

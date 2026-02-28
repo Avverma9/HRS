@@ -1,5 +1,13 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, StatusBar } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  Modal,
+  StatusBar,
+} from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import * as Location from "expo-location";
 import { fetchLocation } from "../store/slices/locationSlice";
@@ -15,7 +23,8 @@ const Home = ({ navigation }) => {
   // --- State Management ---
   const [searchCity, setSearchCity] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [isLocatingCurrentLocation, setIsLocatingCurrentLocation] = useState(false);
+  const [isLocatingCurrentLocation, setIsLocatingCurrentLocation] =
+    useState(false);
   const [countRooms, setCountRooms] = useState(1);
   const [guests, setGuests] = useState(2);
 
@@ -59,8 +68,10 @@ const Home = ({ navigation }) => {
   }, [dispatch]);
 
   // --- Calendar Matrix Generator ---
-  const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
-  const endOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  const startOfMonth = (date) =>
+    new Date(date.getFullYear(), date.getMonth(), 1);
+  const endOfMonth = (date) =>
+    new Date(date.getFullYear(), date.getMonth() + 1, 0);
 
   const getMonthMatrix = (date) => {
     const first = startOfMonth(date);
@@ -70,7 +81,11 @@ const Home = ({ navigation }) => {
     const weeks = [];
     let week = [];
 
-    const prevMonthEnd = new Date(date.getFullYear(), date.getMonth(), 0).getDate();
+    const prevMonthEnd = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      0,
+    ).getDate();
     for (let i = 0; i < startWeekday; i++) {
       const dayNum = prevMonthEnd - (startWeekday - 1 - i);
       week.push({ day: dayNum, inMonth: false, monthOffset: -1 });
@@ -96,7 +111,13 @@ const Home = ({ navigation }) => {
       setSearchCity(title);
       if (isMountedRef.current) setIsSearching(true);
       await dispatch(
-        searchHotel({ city: title, checkInDate, checkOutDate, countRooms, guests })
+        searchHotel({
+          city: title,
+          checkInDate,
+          checkOutDate,
+          countRooms,
+          guests,
+        }),
       ).unwrap();
       navigation.navigate("Hotels", { searchQuery: title });
     } catch (err) {
@@ -116,23 +137,23 @@ const Home = ({ navigation }) => {
     try {
       if (isMountedRef.current) setIsSearching(true);
       await dispatch(
-        searchHotel({ city, checkInDate, checkOutDate, countRooms, guests })
+        searchHotel({ city, checkInDate, checkOutDate, countRooms, guests }),
       ).unwrap();
-      navigation.navigate("Hotels", { 
+      navigation.navigate("Hotels", {
         searchQuery: city,
         checkInDate,
         checkOutDate,
         guests,
-        countRooms
+        countRooms,
       });
     } catch (err) {
       Alert.alert("Search failed", err?.toString());
-      navigation.navigate("Hotels", { 
+      navigation.navigate("Hotels", {
         searchQuery: city,
         checkInDate,
         checkOutDate,
         guests,
-        countRooms
+        countRooms,
       });
     } finally {
       if (isMountedRef.current) setIsSearching(false);
@@ -143,7 +164,10 @@ const Home = ({ navigation }) => {
     Promise.race([
       promise,
       new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Location request timed out")), timeoutMs);
+        setTimeout(
+          () => reject(new Error("Location request timed out")),
+          timeoutMs,
+        );
       }),
     ]);
 
@@ -157,13 +181,18 @@ const Home = ({ navigation }) => {
       }
 
       if (permission?.status !== "granted") {
-        Alert.alert("Location permission required", "Allow location access to auto-fill your city.");
+        Alert.alert(
+          "Location permission required",
+          "Allow location access to auto-fill your city.",
+        );
         return;
       }
 
       const position = await withTimeout(
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-        12000
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }),
+        12000,
       );
 
       const geocode = await withTimeout(
@@ -171,7 +200,7 @@ const Home = ({ navigation }) => {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         }),
-        12000
+        12000,
       );
 
       const place = geocode?.[0] || {};
@@ -184,13 +213,19 @@ const Home = ({ navigation }) => {
         "";
 
       if (!cityName) {
-        Alert.alert("City not found", "Could not detect your city from current location.");
+        Alert.alert(
+          "City not found",
+          "Could not detect your city from current location.",
+        );
         return;
       }
 
       setSearchCity(String(cityName).trim());
     } catch (error) {
-      Alert.alert("Location error", "Unable to get your current city. Please try again.");
+      Alert.alert(
+        "Location error",
+        "Unable to get your current city. Please try again.",
+      );
     } finally {
       if (isMountedRef.current) setIsLocatingCurrentLocation(false);
     }
@@ -212,13 +247,13 @@ const Home = ({ navigation }) => {
   return (
     <View className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" backgroundColor="#f7a78f" />
+      <Header compact showHero={false} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingTop: 28, paddingBottom: 20 }}
       >
-        <Header />
         <SearchCard
           searchCity={searchCity}
           setSearchCity={setSearchCity}
@@ -236,7 +271,10 @@ const Home = ({ navigation }) => {
           onUseCurrentLocation={handleUseCurrentLocation}
         />
 
-        <PopularDestinations locations={locations} onSelectLocation={handleSelect} />
+        <PopularDestinations
+          locations={locations}
+          onSelectLocation={handleSelect}
+        />
         <HomeScreenFrontHotels />
         <HomeScreenFrontTour />
         <HomeScreenFrontCabs />
@@ -267,18 +305,29 @@ const Home = ({ navigation }) => {
                   Select {dateModalTarget === "in" ? "Check-in" : "Check-out"}
                 </Text>
                 <Text className="text-xs text-slate-500">
-                  {calendarBase.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+                  {calendarBase.toLocaleDateString("en-GB", {
+                    month: "long",
+                    year: "numeric",
+                  })}
                 </Text>
               </View>
               <View className="flex-row space-x-2 bg-slate-50 rounded-full p-1 border border-slate-100">
                 <TouchableOpacity
-                  onPress={() => setCalendarBase((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
+                  onPress={() =>
+                    setCalendarBase(
+                      (c) => new Date(c.getFullYear(), c.getMonth() - 1, 1),
+                    )
+                  }
                   className="w-8 h-8 items-center justify-center bg-white rounded-full shadow-sm"
                 >
                   <Text className="font-bold text-slate-700">{"<"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setCalendarBase((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
+                  onPress={() =>
+                    setCalendarBase(
+                      (c) => new Date(c.getFullYear(), c.getMonth() + 1, 1),
+                    )
+                  }
                   className="w-8 h-8 items-center justify-center bg-white rounded-full shadow-sm"
                 >
                   <Text className="font-bold text-slate-700">{">"}</Text>
@@ -288,7 +337,10 @@ const Home = ({ navigation }) => {
 
             <View className="flex-row justify-between mb-2">
               {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((w) => (
-                <Text key={w} className="text-xs font-bold text-slate-400 text-center w-10">
+                <Text
+                  key={w}
+                  className="text-xs font-bold text-slate-400 text-center w-10"
+                >
                   {w}
                 </Text>
               ))}
@@ -298,11 +350,16 @@ const Home = ({ navigation }) => {
               {getMonthMatrix(calendarBase).map((week, wi) => (
                 <View key={wi} className="flex-row justify-between mb-2">
                   {week.map((cell, ci) => {
-                    const month = calendarBase.getMonth() + (cell.monthOffset || 0);
+                    const month =
+                      calendarBase.getMonth() + (cell.monthOffset || 0);
                     let year = calendarBase.getFullYear();
                     if (month < 0) year--;
                     if (month > 11) year++;
-                    const cellDate = new Date(year, (month + 12) % 12, cell.day);
+                    const cellDate = new Date(
+                      year,
+                      (month + 12) % 12,
+                      cell.day,
+                    );
                     const cellISO = iso(cellDate);
 
                     const isStart = cellISO === checkInDate;
@@ -332,12 +389,16 @@ const Home = ({ navigation }) => {
                         onPress={handlePress}
                         className={`w-10 h-10 items-center justify-center rounded-full
                           ${!cell.inMonth ? "opacity-0" : "opacity-100"}
-                          ${(isStart || isEnd) ? "bg-[#0d3b8f]" : inRange ? "bg-blue-100" : "bg-transparent"}
+                          ${isStart || isEnd ? "bg-[#0d3b8f]" : inRange ? "bg-blue-100" : "bg-transparent"}
                         `}
                       >
                         <Text
                           className={`text-sm font-medium ${
-                            isStart || isEnd ? "text-white" : inRange ? "text-blue-800" : "text-slate-800"
+                            isStart || isEnd
+                              ? "text-white"
+                              : inRange
+                                ? "text-blue-800"
+                                : "text-slate-800"
                           }`}
                         >
                           {cell.day}

@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   View,
   Image,
-  StatusBar
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -678,8 +677,6 @@ export default function TourDetails({ navigation, route }) {
 
   return (
     <View className="flex-1 bg-white">
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      
       <View className="flex-1 relative">
         <ScrollView
           className="flex-1 bg-gray-50"
@@ -698,23 +695,6 @@ export default function TourDetails({ navigation, route }) {
                     colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.85)']}
                     className="absolute inset-0"
                 />
-                
-                {/* Header Actions */}
-                <SafeAreaView className="absolute top-0 left-0 right-0 z-10">
-                    <View className="flex-row justify-between px-5 pt-2">
-                        <TouchableOpacity 
-                            onPress={() => navigation.goBack()} 
-                            className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full items-center justify-center border border-white/20"
-                        >
-                            <Ionicons name="chevron-back" size={24} color="white" />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full items-center justify-center border border-white/20"
-                        >
-                            <Ionicons name="share-social-outline" size={20} color="white" />
-                        </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
 
                 {/* Hero Content - Compact & Modern */}
                 <View className="absolute bottom-0 left-0 right-0 p-6 pb-12">
@@ -1381,5 +1361,3 @@ export default function TourDetails({ navigation, route }) {
     </View>
   );
 }
-
-

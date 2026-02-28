@@ -16,7 +16,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { searchHotel } from "../store/slices/hotelSlice";
 import { getBeds, getRooms } from "../store/slices/additionalSlice";
 import { LinearGradient } from "expo-linear-gradient";
-import { MaterialCommunityIcons, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import {
+  MaterialCommunityIcons,
+  Ionicons,
+  MaterialIcons,
+} from "@expo/vector-icons";
 import SearchCard from "../components/SearchCard";
 import SkeletonShimmer from "../components/skeleton/SkeletonShimmer";
 import { HotelCardSkeleton } from "../components/skeleton/HotelSkeleton";
@@ -27,6 +31,10 @@ import {
   getAmenityIconName,
   getTopHotelAmenities,
 } from "../utils/amenities";
+import {
+  getHotelOfferSummary,
+  getHotelStartingPrice,
+} from "../utils/hotelOffers";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 32;
@@ -34,8 +42,15 @@ const CARD_WIDTH = width - 32;
 const Hotels = ({ navigation, route }) => {
   const dispatch = useDispatch();
   const safeParams = route?.params || {};
-  const { searchQuery, checkInDate, checkOutDate, guests, countRooms, showAll } = safeParams;
-  
+  const {
+    searchQuery,
+    checkInDate,
+    checkOutDate,
+    guests,
+    countRooms,
+    showAll,
+  } = safeParams;
+
   const { data: hotels, loading, error } = useSelector((state) => state.hotel);
   const { beds, rooms: roomTypes } = useSelector((state) => state.additional);
 
@@ -43,22 +58,41 @@ const Hotels = ({ navigation, route }) => {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showDateModal, setShowDateModal] = useState(false);
-  const [dateModalTarget, setDateModalTarget] = useState("in"); 
+  const [dateModalTarget, setDateModalTarget] = useState("in");
 
-  const iso = (d) => { try { return d.toISOString().split("T")[0]; } catch(e) { return "2026-02-10"; } }; 
-  const display = (d) => { try { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); } catch(e) { return ""; } };
+  const iso = (d) => {
+    try {
+      return d.toISOString().split("T")[0];
+    } catch (e) {
+      return "2026-02-10";
+    }
+  };
+  const display = (d) => {
+    try {
+      return new Date(d).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+      });
+    } catch (e) {
+      return "";
+    }
+  };
 
   // Local Search state (for the modal)
   const [localCity, setLocalCity] = useState(searchQuery || "");
   const [localRooms, setLocalRooms] = useState(Number(countRooms) || 1);
   const [localGuests, setLocalGuests] = useState(Number(guests) || 2);
-  const [localCheckIn, setLocalCheckIn] = useState(checkInDate || iso(new Date()));
-  const [localCheckOut, setLocalCheckOut] = useState(checkOutDate || iso(new Date(Date.now() + 86400000)));
+  const [localCheckIn, setLocalCheckIn] = useState(
+    checkInDate || iso(new Date()),
+  );
+  const [localCheckOut, setLocalCheckOut] = useState(
+    checkOutDate || iso(new Date(Date.now() + 86400000)),
+  );
   const [calendarBase, setCalendarBase] = useState(new Date(localCheckIn));
 
   // Filter States
-  const [priceRange, setPriceRange] = useState(null); 
-  const [selectedStar, setSelectedStar] = useState(null); 
+  const [priceRange, setPriceRange] = useState(null);
+  const [selectedStar, setSelectedStar] = useState(null);
   const [selectedAmenities, setSelectedAmenities] = useState([]);
   const [selectedBedTypes, setSelectedBedTypes] = useState([]);
   const [selectedRoomTypes, setSelectedRoomTypes] = useState([]);
@@ -70,17 +104,28 @@ const Hotels = ({ navigation, route }) => {
     count += selectedBedTypes.length;
     count += selectedRoomTypes.length;
     return count;
-  }, [priceRange, selectedStar, selectedAmenities, selectedBedTypes, selectedRoomTypes]);
+  }, [
+    priceRange,
+    selectedStar,
+    selectedAmenities,
+    selectedBedTypes,
+    selectedRoomTypes,
+  ]);
 
   const availableAmenities = useMemo(() => {
     const amenityPool = (Array.isArray(hotels) ? hotels : []).flatMap((hotel) =>
-      extractHotelAmenities(hotel)
+      extractHotelAmenities(hotel),
     );
-    const unique = [...new Set(amenityPool.map((item) => String(item || "").trim()).filter(Boolean))];
+    const unique = [
+      ...new Set(
+        amenityPool.map((item) => String(item || "").trim()).filter(Boolean),
+      ),
+    ];
     return unique;
   }, [hotels]);
 
-  const topPadding = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
+  const topPadding =
+    Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0;
 
   const getHotelUniqueId = (hotel) =>
     hotel?.hotelId ??
@@ -106,20 +151,20 @@ const Hotels = ({ navigation, route }) => {
       checkOutDate: localCheckOut,
       guests: localGuests ? Number(localGuests) : 1,
       countRooms: localRooms ? Number(localRooms) : 1,
-      ...extras // e.g. minPrice, maxPrice, starRating, amenities
+      ...extras, // e.g. minPrice, maxPrice, starRating, amenities
     };
 
     dispatch(searchHotel(payload));
   };
 
   useEffect(() => {
-     if (searchQuery) setLocalCity(searchQuery);
-     if (checkInDate) setLocalCheckIn(checkInDate);
-     if (checkOutDate) setLocalCheckOut(checkOutDate);
-     if (guests) {
-         setLocalGuests(Number(guests)); 
-       }
-     if (countRooms) setLocalRooms(Number(countRooms));
+    if (searchQuery) setLocalCity(searchQuery);
+    if (checkInDate) setLocalCheckIn(checkInDate);
+    if (checkOutDate) setLocalCheckOut(checkOutDate);
+    if (guests) {
+      setLocalGuests(Number(guests));
+    }
+    if (countRooms) setLocalRooms(Number(countRooms));
   }, [searchQuery, checkInDate, checkOutDate, guests, countRooms]);
 
   // Initial load:
@@ -136,7 +181,7 @@ const Hotels = ({ navigation, route }) => {
           checkOutDate,
           guests,
           countRooms,
-        })
+        }),
       );
       return;
     }
@@ -144,29 +189,37 @@ const Hotels = ({ navigation, route }) => {
     if (showAll || !hasQuery) {
       dispatch(searchHotel({ page: 1, limit: 50 }));
     }
-  }, [dispatch, searchQuery, checkInDate, checkOutDate, guests, countRooms, showAll]);
+  }, [
+    dispatch,
+    searchQuery,
+    checkInDate,
+    checkOutDate,
+    guests,
+    countRooms,
+    showAll,
+  ]);
 
   const toggleAmenity = (amenity) => {
     if (selectedAmenities.includes(amenity)) {
-      setSelectedAmenities(prev => prev.filter(a => a !== amenity));
+      setSelectedAmenities((prev) => prev.filter((a) => a !== amenity));
     } else {
-      setSelectedAmenities(prev => [...prev, amenity]);
+      setSelectedAmenities((prev) => [...prev, amenity]);
     }
   };
 
   const toggleBedType = (bed) => {
     if (selectedBedTypes.includes(bed)) {
-      setSelectedBedTypes(prev => prev.filter(b => b !== bed));
+      setSelectedBedTypes((prev) => prev.filter((b) => b !== bed));
     } else {
-      setSelectedBedTypes(prev => [...prev, bed]);
+      setSelectedBedTypes((prev) => [...prev, bed]);
     }
   };
 
   const toggleRoomType = (room) => {
     if (selectedRoomTypes.includes(room)) {
-      setSelectedRoomTypes(prev => prev.filter(r => r !== room));
+      setSelectedRoomTypes((prev) => prev.filter((r) => r !== room));
     } else {
-      setSelectedRoomTypes(prev => [...prev, room]);
+      setSelectedRoomTypes((prev) => [...prev, room]);
     }
   };
 
@@ -187,7 +240,7 @@ const Hotels = ({ navigation, route }) => {
           checkOutDate: localCheckOut,
           guests: localGuests ? Number(localGuests) : 1,
           countRooms: localRooms ? Number(localRooms) : 1,
-        })
+        }),
       );
       return;
     }
@@ -197,13 +250,22 @@ const Hotels = ({ navigation, route }) => {
 
   const applyFilters = () => {
     let minPrice, maxPrice;
-    if (priceRange === '₹0 - ₹1500') { minPrice = 0; maxPrice = 1500; }
-    else if (priceRange === '₹1500 - ₹3000') { minPrice = 1500; maxPrice = 3000; }
-    else if (priceRange === '₹3000+') { minPrice = 3000; }
+    if (priceRange === "₹0 - ₹1500") {
+      minPrice = 0;
+      maxPrice = 1500;
+    } else if (priceRange === "₹1500 - ₹3000") {
+      minPrice = 1500;
+      maxPrice = 3000;
+    } else if (priceRange === "₹3000+") {
+      minPrice = 3000;
+    }
 
-    const amenitiesStr = selectedAmenities.length > 0 ? selectedAmenities.join(',') : undefined;
-    const bedTypeStr = selectedBedTypes.length > 0 ? selectedBedTypes.join(',') : undefined;
-    const roomTypeStr = selectedRoomTypes.length > 0 ? selectedRoomTypes.join(',') : undefined;
+    const amenitiesStr =
+      selectedAmenities.length > 0 ? selectedAmenities.join(",") : undefined;
+    const bedTypeStr =
+      selectedBedTypes.length > 0 ? selectedBedTypes.join(",") : undefined;
+    const roomTypeStr =
+      selectedRoomTypes.length > 0 ? selectedRoomTypes.join(",") : undefined;
 
     performSearch({
       minPrice,
@@ -211,7 +273,7 @@ const Hotels = ({ navigation, route }) => {
       starRating: selectedStar,
       amenities: amenitiesStr,
       bedType: bedTypeStr,
-      roomType: roomTypeStr
+      roomType: roomTypeStr,
     });
 
     setShowFilterModal(false);
@@ -234,7 +296,7 @@ const Hotels = ({ navigation, route }) => {
     setShowDateModal(true);
   };
 
-  // Date Logic for Modal 
+  // Date Logic for Modal
   const getMonthMatrix = (date) => {
     const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
     const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
@@ -242,18 +304,29 @@ const Hotels = ({ navigation, route }) => {
     const daysInMonth = endOfMonth.getDate();
     const weeks = [];
     let week = [];
-    const prevMonthEnd = new Date(date.getFullYear(), date.getMonth(), 0).getDate();
-    
+    const prevMonthEnd = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      0,
+    ).getDate();
+
     for (let i = 0; i < startWeekday; i++) {
-        week.push({ day: prevMonthEnd - (startWeekday - 1 - i), inMonth: false, monthOffset: -1 });
+      week.push({
+        day: prevMonthEnd - (startWeekday - 1 - i),
+        inMonth: false,
+        monthOffset: -1,
+      });
     }
     for (let d = 1; d <= daysInMonth; d++) {
-        week.push({ day: d, inMonth: true, monthOffset: 0 });
-        if (week.length === 7) { weeks.push(week); week = []; }
+      week.push({ day: d, inMonth: true, monthOffset: 0 });
+      if (week.length === 7) {
+        weeks.push(week);
+        week = [];
+      }
     }
     let nextDay = 1;
     while (week.length < 7 && week.length > 0) {
-        week.push({ day: nextDay++, inMonth: false, monthOffset: 1 });
+      week.push({ day: nextDay++, inMonth: false, monthOffset: 1 });
     }
     if (week.length > 0) weeks.push(week);
     return weeks;
@@ -269,7 +342,7 @@ const Hotels = ({ navigation, route }) => {
           name={i < numRating ? "star" : "star-outline"}
           size={14}
           color={i < numRating ? "#facc15" : "#cbd5e1"}
-        />
+        />,
       );
     }
     return stars;
@@ -281,11 +354,21 @@ const Hotels = ({ navigation, route }) => {
     const rawRating = Number(hotel.rating || hotel.starRating || 4.2);
     const rating = Number.isFinite(rawRating) ? rawRating.toFixed(1) : "4.2";
     const cardAmenities = getTopHotelAmenities(hotel, 3);
-    const topAmenities = [...cardAmenities, ...availableAmenities.filter((a) => !cardAmenities.includes(a))].slice(0, 3);
+    const topAmenities = [
+      ...cardAmenities,
+      ...availableAmenities.filter((a) => !cardAmenities.includes(a)),
+    ].slice(0, 3);
 
-    const lowestPrice = hotel.rooms?.length > 0
-      ? Math.min(...hotel.rooms.map((room) => room.price))
-      : 2499;
+    const offerSummary = getHotelOfferSummary(hotel);
+    const hasOffer = offerSummary.hasOffer;
+    const startingPrice = getHotelStartingPrice(hotel);
+    const displayFinalPrice =
+      (hasOffer ? offerSummary.finalPrice : startingPrice) ||
+      startingPrice ||
+      2499;
+    const displayOriginalPrice = hasOffer
+      ? Math.max(offerSummary.originalPrice || 0, displayFinalPrice)
+      : 0;
     const hotelId = getHotelUniqueId(hotel);
     const mainImage = hotel.images?.[0] || null;
     const openHotelDetails = () => {
@@ -308,7 +391,11 @@ const Hotels = ({ navigation, route }) => {
         <View className="flex-row h-[120px]">
           <View className="w-[98px] h-[120px] rounded-[10px] overflow-hidden bg-slate-200 relative">
             {mainImage ? (
-              <Image source={{ uri: mainImage }} className="w-full h-full" resizeMode="cover" />
+              <Image
+                source={{ uri: mainImage }}
+                className="w-full h-full"
+                resizeMode="cover"
+              />
             ) : (
               <View className="w-full h-full items-center justify-center bg-slate-300">
                 <Ionicons name="image-outline" size={24} color="#94a3b8" />
@@ -317,19 +404,33 @@ const Hotels = ({ navigation, route }) => {
 
             <View className="absolute top-1.5 left-1.5 rounded-full px-1.5 py-0.5 bg-white/90 border border-slate-200 flex-row items-center">
               <Ionicons name="star" size={8} color="#f59e0b" />
-              <Text className="text-[9px] font-black text-slate-800 ml-1">{rating}</Text>
+              <Text className="text-[9px] font-black text-slate-800 ml-1">
+                {rating}
+              </Text>
             </View>
+
+            {hasOffer && (
+              <View className="absolute top-1.5 right-1.5 rounded-full px-2 py-0.5 bg-rose-600 border border-rose-700">
+                <Text className="text-[9px] font-black text-white">Offer</Text>
+              </View>
+            )}
           </View>
 
           <View className="flex-1 ml-2.5 justify-between">
             <View>
-              <Text className="text-[13px] leading-[16px] font-black text-slate-900" numberOfLines={2}>
+              <Text
+                className="text-[13px] leading-[16px] font-black text-slate-900"
+                numberOfLines={2}
+              >
                 {title}
               </Text>
 
               <View className="flex-row items-center mt-0.5">
                 <Ionicons name="location-sharp" size={10} color="#334155" />
-                <Text className="text-[11px] font-semibold text-slate-600 ml-1" numberOfLines={1}>
+                <Text
+                  className="text-[11px] font-semibold text-slate-600 ml-1"
+                  numberOfLines={1}
+                >
                   {city}
                 </Text>
               </View>
@@ -340,7 +441,10 @@ const Hotels = ({ navigation, route }) => {
                     key={`${amenity}-${idx}`}
                     className="px-1.5 py-0.5 rounded-full bg-slate-50 border border-slate-200"
                   >
-                    <Text className="text-[9px] font-extrabold text-slate-600" numberOfLines={1}>
+                    <Text
+                      className="text-[9px] font-extrabold text-slate-600"
+                      numberOfLines={1}
+                    >
                       {amenity}
                     </Text>
                   </View>
@@ -350,11 +454,40 @@ const Hotels = ({ navigation, route }) => {
 
             <View className="flex-row items-end justify-between mt-1">
               <View className="flex-1 pr-2">
-                <Text className="text-[8px] font-black tracking-wider text-slate-400">STARTING FROM</Text>
-                <Text className="text-[18px] leading-[20px] font-black text-[#0d3b8f]" numberOfLines={1}>
-                  {`\u20B9${lowestPrice}`}
+                <Text className="text-[8px] font-black tracking-wider text-slate-400">
+                  STARTING FROM
                 </Text>
-                <Text className="text-[10px] font-semibold text-slate-500 mt-[-1px]">/ night</Text>
+                <Text
+                  className="text-[18px] leading-[20px] font-black text-[#0d3b8f]"
+                  numberOfLines={1}
+                >
+                  {`\u20B9${Math.round(displayFinalPrice).toLocaleString("en-IN")}`}
+                </Text>
+                {hasOffer && displayOriginalPrice > displayFinalPrice && (
+                  <View className="flex-row items-center mt-[1px]">
+                    <Text className="text-[10px] font-bold text-slate-400 line-through">
+                      {`\u20B9${Math.round(displayOriginalPrice).toLocaleString("en-IN")}`}
+                    </Text>
+                    <Text className="text-[10px] font-black text-rose-600 ml-1.5">
+                      SAVE{" "}
+                      {`\u20B9${Math.round(
+                        offerSummary.discountAmount ||
+                          displayOriginalPrice - displayFinalPrice,
+                      ).toLocaleString("en-IN")}`}
+                    </Text>
+                  </View>
+                )}
+                {hasOffer && !!offerSummary.offerName && (
+                  <Text
+                    className="text-[10px] font-semibold text-rose-600 mt-[1px]"
+                    numberOfLines={1}
+                  >
+                    {offerSummary.offerName}
+                  </Text>
+                )}
+                <Text className="text-[10px] font-semibold text-slate-500 mt-[-1px]">
+                  / night
+                </Text>
               </View>
 
               <TouchableOpacity
@@ -363,7 +496,12 @@ const Hotels = ({ navigation, route }) => {
                 className="h-8 min-w-[88px] rounded-[10px] bg-[#0d3b8f] px-3 flex-row items-center justify-center"
               >
                 <Text className="text-[12px] font-black text-white">View</Text>
-                <Ionicons name="arrow-forward" size={10} color="#ffffff" style={{ marginLeft: 4 }} />
+                <Ionicons
+                  name="arrow-forward"
+                  size={10}
+                  color="#ffffff"
+                  style={{ marginLeft: 4 }}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -377,7 +515,12 @@ const Hotels = ({ navigation, route }) => {
         {/* Header skeleton */}
         <View className="bg-white px-4 py-3 border-b border-slate-100">
           <SkeletonShimmer height={16} width="50%" radius={8} />
-          <SkeletonShimmer height={12} width="70%" radius={8} style={{ marginTop: 6 }} />
+          <SkeletonShimmer
+            height={12}
+            width="70%"
+            radius={8}
+            style={{ marginTop: 6 }}
+          />
         </View>
 
         {/* Filter chips skeleton */}
@@ -387,9 +530,24 @@ const Hotels = ({ navigation, route }) => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16 }}
           >
-            <SkeletonShimmer height={28} width={90} radius={14} style={{ marginRight: 8 }} />
-            <SkeletonShimmer height={28} width={110} radius={14} style={{ marginRight: 8 }} />
-            <SkeletonShimmer height={28} width={90} radius={14} style={{ marginRight: 8 }} />
+            <SkeletonShimmer
+              height={28}
+              width={90}
+              radius={14}
+              style={{ marginRight: 8 }}
+            />
+            <SkeletonShimmer
+              height={28}
+              width={110}
+              radius={14}
+              style={{ marginRight: 8 }}
+            />
+            <SkeletonShimmer
+              height={28}
+              width={90}
+              radius={14}
+              style={{ marginRight: 8 }}
+            />
             <SkeletonShimmer height={28} width={80} radius={14} />
           </ScrollView>
         </View>
@@ -421,8 +579,8 @@ const Hotels = ({ navigation, route }) => {
               searchHotel(
                 String(searchQuery || "").trim()
                   ? { city: searchQuery }
-                  : { page: 1, limit: 50 }
-              )
+                  : { page: 1, limit: 50 },
+              ),
             )
           }
           className="bg-blue-600 px-6 py-3 rounded-xl mt-6"
@@ -445,12 +603,19 @@ const Hotels = ({ navigation, route }) => {
       />
 
       <View className="bg-white px-4 py-3 flex-row items-center justify-between border-b border-slate-100">
-        <TouchableOpacity className="flex-1" onPress={() => setShowSearchModal(true)}>
-          <Text className="text-[17px] font-bold text-slate-900 leading-tight" numberOfLines={1}>
+        <TouchableOpacity
+          className="flex-1"
+          onPress={() => setShowSearchModal(true)}
+        >
+          <Text
+            className="text-[17px] font-bold text-slate-900 leading-tight"
+            numberOfLines={1}
+          >
             {localCity || (showAll ? "All Hotels" : "Where to?")}
           </Text>
           <Text className="text-[11px] text-slate-500 font-medium mt-0.5">
-            {display(localCheckIn)} - {display(localCheckOut)} • {localGuests} Guest{localGuests > 1 ? "s" : ""}
+            {display(localCheckIn)} - {display(localCheckOut)} • {localGuests}{" "}
+            Guest{localGuests > 1 ? "s" : ""}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowSearchModal(true)}>
@@ -460,34 +625,47 @@ const Hotels = ({ navigation, route }) => {
 
       {/* Filter Chips */}
       <View className="bg-white pb-3 pt-2">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
-              <TouchableOpacity 
-                onPress={() => setShowFilterModal(true)}
-                className="flex-row items-center border border-slate-300 rounded-full px-3 py-1.5 mr-2 bg-slate-50 relative"
-              >
-                  <Ionicons name="options-outline" size={16} color="#0f172a" style={{ marginRight: 6}} />
-                  <Text className="text-xs font-bold text-slate-900">Filters</Text>
-                  {activeFilterCount > 0 && (
-                    <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0d3b8f] border border-white items-center justify-center">
-                      <Text className="text-white text-[10px] font-black">
-                        {activeFilterCount > 99 ? "99+" : activeFilterCount}
-                      </Text>
-                    </View>
-                  )}
-              </TouchableOpacity>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16 }}
+        >
+          <TouchableOpacity
+            onPress={() => setShowFilterModal(true)}
+            className="flex-row items-center border border-slate-300 rounded-full px-3 py-1.5 mr-2 bg-slate-50 relative"
+          >
+            <Ionicons
+              name="options-outline"
+              size={16}
+              color="#0f172a"
+              style={{ marginRight: 6 }}
+            />
+            <Text className="text-xs font-bold text-slate-900">Filters</Text>
+            {activeFilterCount > 0 && (
+              <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0d3b8f] border border-white items-center justify-center">
+                <Text className="text-white text-[10px] font-black">
+                  {activeFilterCount > 99 ? "99+" : activeFilterCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-              <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
-                  <Text className="text-xs font-medium text-slate-600">Price: Low to High</Text>
-              </TouchableOpacity>
+          <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
+            <Text className="text-xs font-medium text-slate-600">
+              Price: Low to High
+            </Text>
+          </TouchableOpacity>
 
-              <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
-                  <Text className="text-xs font-medium text-slate-600">4★ & above</Text>
-              </TouchableOpacity>
+          <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
+            <Text className="text-xs font-medium text-slate-600">
+              4★ & above
+            </Text>
+          </TouchableOpacity>
 
-              <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
-                   <Text className="text-xs font-medium text-slate-600">Near Me</Text>
-              </TouchableOpacity>
-          </ScrollView>
+          <TouchableOpacity className="border border-slate-300 rounded-full px-3 py-1.5 mr-2">
+            <Text className="text-xs font-medium text-slate-600">Near Me</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* Hotels List */}
@@ -511,7 +689,9 @@ const Hotels = ({ navigation, route }) => {
         <FlatList
           data={hotels}
           renderItem={({ item }) => <HotelCard hotel={item} />}
-          keyExtractor={(item, index) => String(getHotelUniqueId(item) || `hotel-${index}`)}
+          keyExtractor={(item, index) =>
+            String(getHotelUniqueId(item) || `hotel-${index}`)
+          }
           contentContainerStyle={{ paddingTop: 12, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         />
@@ -528,8 +708,10 @@ const Hotels = ({ navigation, route }) => {
           <View className="bg-white rounded-t-3xl h-[85%] w-full">
             {/* Modal Header */}
             <View className="flex-row items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
-              <Text className="text-xl font-extrabold text-slate-900">Filters</Text>
-              <TouchableOpacity 
+              <Text className="text-xl font-extrabold text-slate-900">
+                Filters
+              </Text>
+              <TouchableOpacity
                 onPress={() => setShowFilterModal(false)}
                 className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center"
               >
@@ -537,46 +719,66 @@ const Hotels = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView className="flex-1 px-5 pt-2" showsVerticalScrollIndicator={false}>
-              
+            <ScrollView
+              className="flex-1 px-5 pt-2"
+              showsVerticalScrollIndicator={false}
+            >
               {/* Price Range */}
               <View className="mt-4">
-                <Text className="text-sm font-bold text-slate-900 mb-3">Price Range (Per Night)</Text>
+                <Text className="text-sm font-bold text-slate-900 mb-3">
+                  Price Range (Per Night)
+                </Text>
                 <View className="flex-row flex-wrap gap-3">
-                  {['₹0 - ₹1500', '₹1500 - ₹3000', '₹3000+'].map((range, idx) => {
-                     const isSelected = priceRange === range;
-                     return (
-                      <TouchableOpacity
-                        key={idx}
-                        onPress={() => setPriceRange(isSelected ? null : range)}
-                        className={`px-4 py-2.5 rounded-xl border ${
-                          isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
-                        }`}
-                      >
-                        <Text className={`text-xs font-bold ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
-                          {range}
-                        </Text>
-                      </TouchableOpacity>
-                     );
-                  })}
+                  {["₹0 - ₹1500", "₹1500 - ₹3000", "₹3000+"].map(
+                    (range, idx) => {
+                      const isSelected = priceRange === range;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          onPress={() =>
+                            setPriceRange(isSelected ? null : range)
+                          }
+                          className={`px-4 py-2.5 rounded-xl border ${
+                            isSelected
+                              ? "bg-blue-50 border-blue-600"
+                              : "bg-white border-slate-200"
+                          }`}
+                        >
+                          <Text
+                            className={`text-xs font-bold ${isSelected ? "text-blue-700" : "text-slate-600"}`}
+                          >
+                            {range}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    },
+                  )}
                 </View>
               </View>
 
               {/* Star Rating */}
               <View className="mt-8">
-                <Text className="text-sm font-bold text-slate-900 mb-3">Star Rating</Text>
+                <Text className="text-sm font-bold text-slate-900 mb-3">
+                  Star Rating
+                </Text>
                 <View className="flex-row gap-3">
                   {[3, 4, 5].map((star) => {
                     const isSelected = selectedStar === star;
                     return (
                       <TouchableOpacity
                         key={star}
-                        onPress={() => setSelectedStar(isSelected ? null : star)}
+                        onPress={() =>
+                          setSelectedStar(isSelected ? null : star)
+                        }
                         className={`flex-1 py-3 rounded-xl border items-center justify-center ${
-                          isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
+                          isSelected
+                            ? "bg-blue-50 border-blue-600"
+                            : "bg-white border-slate-200"
                         }`}
                       >
-                        <Text className={`text-sm font-bold ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                        <Text
+                          className={`text-sm font-bold ${isSelected ? "text-blue-700" : "text-slate-600"}`}
+                        >
                           {star} ★
                         </Text>
                       </TouchableOpacity>
@@ -588,7 +790,9 @@ const Hotels = ({ navigation, route }) => {
               {/* Bed Types */}
               {beds && beds.length > 0 && (
                 <View className="mt-8">
-                  <Text className="text-sm font-bold text-slate-900 mb-3">Bed Types</Text>
+                  <Text className="text-sm font-bold text-slate-900 mb-3">
+                    Bed Types
+                  </Text>
                   <View className="flex-row flex-wrap gap-3">
                     {beds.map((bed, idx) => {
                       const isSelected = selectedBedTypes.includes(bed.name);
@@ -597,10 +801,14 @@ const Hotels = ({ navigation, route }) => {
                           key={idx}
                           onPress={() => toggleBedType(bed.name)}
                           className={`px-4 py-3 rounded-xl border ${
-                            isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
+                            isSelected
+                              ? "bg-blue-50 border-blue-600"
+                              : "bg-white border-slate-200"
                           }`}
                         >
-                          <Text className={`text-xs font-bold ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                          <Text
+                            className={`text-xs font-bold ${isSelected ? "text-blue-700" : "text-slate-600"}`}
+                          >
                             {bed.name}
                           </Text>
                         </TouchableOpacity>
@@ -613,7 +821,9 @@ const Hotels = ({ navigation, route }) => {
               {/* Room Types */}
               {roomTypes && roomTypes.length > 0 && (
                 <View className="mt-8">
-                  <Text className="text-sm font-bold text-slate-900 mb-3">Room Types</Text>
+                  <Text className="text-sm font-bold text-slate-900 mb-3">
+                    Room Types
+                  </Text>
                   <View className="flex-row flex-wrap gap-3">
                     {roomTypes.map((room, idx) => {
                       const isSelected = selectedRoomTypes.includes(room.name);
@@ -622,10 +832,14 @@ const Hotels = ({ navigation, route }) => {
                           key={idx}
                           onPress={() => toggleRoomType(room.name)}
                           className={`px-4 py-3 rounded-xl border ${
-                            isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
+                            isSelected
+                              ? "bg-blue-50 border-blue-600"
+                              : "bg-white border-slate-200"
                           }`}
                         >
-                          <Text className={`text-xs font-bold ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                          <Text
+                            className={`text-xs font-bold ${isSelected ? "text-blue-700" : "text-slate-600"}`}
+                          >
                             {room.name}
                           </Text>
                         </TouchableOpacity>
@@ -637,23 +851,34 @@ const Hotels = ({ navigation, route }) => {
 
               {/* Amenities */}
               <View className="mt-8 mb-10">
-                <Text className="text-sm font-bold text-slate-900 mb-3">Amenities</Text>
+                <Text className="text-sm font-bold text-slate-900 mb-3">
+                  Amenities
+                </Text>
                 {availableAmenities.length > 0 ? (
                   <View className="flex-row flex-wrap gap-3">
                     {availableAmenities.map((amenity, idx) => {
                       const amenityLabel = getAmenityDisplayName(amenity);
                       const amenityIcon = getAmenityIconName(amenityLabel);
-                      const isSelected = selectedAmenities.includes(amenityLabel);
+                      const isSelected =
+                        selectedAmenities.includes(amenityLabel);
                       return (
                         <TouchableOpacity
                           key={idx}
                           onPress={() => toggleAmenity(amenityLabel)}
                           className={`w-[30%] py-4 rounded-xl border items-center justify-center ${
-                            isSelected ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200'
+                            isSelected
+                              ? "bg-blue-50 border-blue-600"
+                              : "bg-white border-slate-200"
                           }`}
-                        > 
-                          <Ionicons name={amenityIcon} size={20} color={isSelected ? '#2563eb' : '#64748b'} />
-                          <Text className={`text-xs font-semibold mt-2 ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                        >
+                          <Ionicons
+                            name={amenityIcon}
+                            size={20}
+                            color={isSelected ? "#2563eb" : "#64748b"}
+                          />
+                          <Text
+                            className={`text-xs font-semibold mt-2 ${isSelected ? "text-blue-700" : "text-slate-600"}`}
+                          >
                             {amenityLabel}
                           </Text>
                         </TouchableOpacity>
@@ -661,26 +886,31 @@ const Hotels = ({ navigation, route }) => {
                     })}
                   </View>
                 ) : (
-                  <Text className="text-xs font-medium text-slate-500">No amenities data available.</Text>
+                  <Text className="text-xs font-medium text-slate-500">
+                    No amenities data available.
+                  </Text>
                 )}
               </View>
-
             </ScrollView>
 
             {/* Footer Buttons */}
             <View className="p-5 border-t border-slate-100 flex-row items-center gap-4 bg-white pb-8">
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={clearFilters}
                 className="flex-1 py-3.5 items-center justify-center"
               >
-                <Text className="text-slate-600 font-bold text-base">Clear All</Text>
+                <Text className="text-slate-600 font-bold text-base">
+                  Clear All
+                </Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 onPress={applyFilters}
                 className="flex-2 w-[60%] py-3.5 bg-[#0d3b8f] rounded-xl items-center justify-center shadow-lg shadow-blue-900/20"
               >
-                <Text className="text-white font-bold text-base">Apply Filters</Text>
+                <Text className="text-white font-bold text-base">
+                  Apply Filters
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -694,121 +924,141 @@ const Hotels = ({ navigation, route }) => {
         visible={showSearchModal}
         onRequestClose={() => setShowSearchModal(false)}
       >
-        <TouchableOpacity 
-            activeOpacity={1}
-            onPress={() => setShowSearchModal(false)}
-            className="flex-1 bg-black/40 justify-start pt-28 px-4"
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setShowSearchModal(false)}
+          className="flex-1 bg-black/40 justify-start pt-28 px-4"
         >
-            <TouchableOpacity 
-                activeOpacity={1}
-                className="bg-white rounded-2xl p-4 shadow-2xl w-full"
+          <TouchableOpacity
+            activeOpacity={1}
+            className="bg-white rounded-2xl p-4 shadow-2xl w-full"
+          >
+            {/* Header / Title */}
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">
+                Update Search Criteria
+              </Text>
+              <TouchableOpacity onPress={() => setShowSearchModal(false)}>
+                <Ionicons name="close-circle" size={22} color="#cbd5e1" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Destination Input - Ultra Compact */}
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 mb-3">
+              <Ionicons name="location" size={16} color="#0d3b8f" />
+              <TextInput
+                className="flex-1 ml-2 text-sm text-[#0f172a] font-bold"
+                placeholder="Destination?"
+                placeholderTextColor="#94a3b8"
+                value={localCity}
+                onChangeText={setLocalCity}
+              />
+            </View>
+
+            {/* Dates Row - Compact Grid */}
+            <View className="flex-row gap-2 mb-3">
+              <TouchableOpacity
+                onPress={openCheckIn}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex-row justify-between items-center"
+              >
+                <View>
+                  <Text className="text-[9px] font-bold text-slate-400 uppercase">
+                    Check-in
+                  </Text>
+                  <Text className="text-xs font-bold text-[#0f172a] mt-0.5">
+                    {display(localCheckIn)}
+                  </Text>
+                </View>
+                <Ionicons name="calendar-outline" size={14} color="#64748b" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={openCheckOut}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex-row justify-between items-center"
+              >
+                <View>
+                  <Text className="text-[9px] font-bold text-slate-400 uppercase">
+                    Check-out
+                  </Text>
+                  <Text className="text-xs font-bold text-[#0f172a] mt-0.5">
+                    {display(localCheckOut)}
+                  </Text>
+                </View>
+                <Ionicons name="calendar-outline" size={14} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Guests & Rooms - Compact Row */}
+            <View className="flex-row gap-2 mb-4">
+              {/* Guests */}
+              <View className="flex-1 flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2">
+                <View>
+                  <Text className="text-[9px] font-bold text-slate-400 uppercase">
+                    Guests
+                  </Text>
+                  <Text className="text-sm font-bold text-[#0f172a]">
+                    {localGuests}
+                  </Text>
+                </View>
+                <View className="flex-row items-center gap-1.5">
+                  <TouchableOpacity
+                    onPress={() => setLocalGuests(Math.max(1, localGuests - 1))}
+                    className="w-6 h-6 bg-white border border-slate-200 rounded-full items-center justify-center"
+                  >
+                    <Ionicons name="remove" size={12} color="#64748b" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setLocalGuests(localGuests + 1)}
+                    className="w-6 h-6 bg-[#0d3b8f] rounded-full items-center justify-center"
+                  >
+                    <Ionicons name="add" size={12} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Rooms */}
+              <View className="flex-1 flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2">
+                <View>
+                  <Text className="text-[9px] font-bold text-slate-400 uppercase">
+                    Rooms
+                  </Text>
+                  <Text className="text-sm font-bold text-[#0f172a]">
+                    {localRooms}
+                  </Text>
+                </View>
+                <View className="flex-row items-center gap-1.5">
+                  <TouchableOpacity
+                    onPress={() => setLocalRooms(Math.max(1, localRooms - 1))}
+                    className="w-6 h-6 bg-white border border-slate-200 rounded-full items-center justify-center"
+                  >
+                    <Ionicons name="remove" size={12} color="#64748b" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setLocalRooms(localRooms + 1)}
+                    className="w-6 h-6 bg-[#0d3b8f] rounded-full items-center justify-center"
+                  >
+                    <Ionicons name="add" size={12} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Search Button */}
+            <TouchableOpacity
+              onPress={handleSearchSubmit}
+              className="bg-[#0d3b8f] py-3 rounded-xl flex-row justify-center items-center shadow-md shadow-blue-900/20"
             >
-                
-                {/* Header / Title */}
-                <View className="flex-row items-center justify-between mb-3">
-                    <Text className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">
-                        Update Search Criteria
-                    </Text>
-                    <TouchableOpacity 
-                        onPress={() => setShowSearchModal(false)} 
-                    >
-                        <Ionicons name="close-circle" size={22} color="#cbd5e1" />
-                    </TouchableOpacity>
-                </View>
-                
-                {/* Destination Input - Ultra Compact */}
-                <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 mb-3">
-                    <Ionicons name="location" size={16} color="#0d3b8f" />
-                    <TextInput 
-                        className="flex-1 ml-2 text-sm text-[#0f172a] font-bold"
-                        placeholder="Destination?"
-                        placeholderTextColor="#94a3b8"
-                        value={localCity}
-                        onChangeText={setLocalCity}
-                    />
-                </View>
-
-                {/* Dates Row - Compact Grid */}
-                <View className="flex-row gap-2 mb-3">
-                    <TouchableOpacity 
-                        onPress={openCheckIn} 
-                        className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex-row justify-between items-center"
-                    >
-                        <View>
-                            <Text className="text-[9px] font-bold text-slate-400 uppercase">Check-in</Text>
-                            <Text className="text-xs font-bold text-[#0f172a] mt-0.5">{display(localCheckIn)}</Text>
-                        </View>
-                        <Ionicons name="calendar-outline" size={14} color="#64748b" />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                        onPress={openCheckOut} 
-                        className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex-row justify-between items-center"
-                    >
-                        <View>
-                            <Text className="text-[9px] font-bold text-slate-400 uppercase">Check-out</Text>
-                            <Text className="text-xs font-bold text-[#0f172a] mt-0.5">{display(localCheckOut)}</Text>
-                        </View>
-                        <Ionicons name="calendar-outline" size={14} color="#64748b" />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Guests & Rooms - Compact Row */}
-                <View className="flex-row gap-2 mb-4">
-                     {/* Guests */}
-                     <View className="flex-1 flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2">
-                         <View>
-                             <Text className="text-[9px] font-bold text-slate-400 uppercase">Guests</Text>
-                             <Text className="text-sm font-bold text-[#0f172a]">{localGuests}</Text>
-                         </View>
-                         <View className="flex-row items-center gap-1.5">
-                             <TouchableOpacity 
-                                 onPress={() => setLocalGuests(Math.max(1, localGuests - 1))}
-                                 className="w-6 h-6 bg-white border border-slate-200 rounded-full items-center justify-center"
-                             >
-                                 <Ionicons name="remove" size={12} color="#64748b" />
-                             </TouchableOpacity>
-                             <TouchableOpacity 
-                                 onPress={() => setLocalGuests(localGuests + 1)}
-                                 className="w-6 h-6 bg-[#0d3b8f] rounded-full items-center justify-center"
-                             >
-                                 <Ionicons name="add" size={12} color="white" />
-                             </TouchableOpacity>
-                         </View>
-                     </View>
-
-                     {/* Rooms */}
-                     <View className="flex-1 flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2">
-                         <View>
-                             <Text className="text-[9px] font-bold text-slate-400 uppercase">Rooms</Text>
-                             <Text className="text-sm font-bold text-[#0f172a]">{localRooms}</Text>
-                         </View>
-                         <View className="flex-row items-center gap-1.5">
-                             <TouchableOpacity 
-                                 onPress={() => setLocalRooms(Math.max(1, localRooms - 1))}
-                                 className="w-6 h-6 bg-white border border-slate-200 rounded-full items-center justify-center"
-                             >
-                                 <Ionicons name="remove" size={12} color="#64748b" />
-                             </TouchableOpacity>
-                             <TouchableOpacity 
-                                 onPress={() => setLocalRooms(localRooms + 1)}
-                                 className="w-6 h-6 bg-[#0d3b8f] rounded-full items-center justify-center"
-                             >
-                                 <Ionicons name="add" size={12} color="white" />
-                             </TouchableOpacity>
-                         </View>
-                     </View>
-                </View>
-
-                {/* Search Button */}
-                <TouchableOpacity 
-                    onPress={handleSearchSubmit}
-                    className="bg-[#0d3b8f] py-3 rounded-xl flex-row justify-center items-center shadow-md shadow-blue-900/20"
-                >
-                    <Ionicons name="search" size={16} color="white" className="mr-1.5" />
-                    <Text className="text-white font-bold text-sm ml-1">Search Hotels</Text>
-                </TouchableOpacity>
+              <Ionicons
+                name="search"
+                size={16}
+                color="white"
+                className="mr-1.5"
+              />
+              <Text className="text-white font-bold text-sm ml-1">
+                Search Hotels
+              </Text>
             </TouchableOpacity>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -820,66 +1070,95 @@ const Hotels = ({ navigation, route }) => {
         onRequestClose={() => setShowDateModal(false)}
       >
         <View className="flex-1 bg-black/60 justify-center items-center px-6">
-            <View className="bg-white w-full rounded-2xl p-4 shadow-2xl">
-                <View className="flex-row justify-between items-center mb-4 pb-4 border-b border-slate-100">
-                    <Text className="text-lg font-bold text-slate-800">
-                       Select {dateModalTarget === "in" ? "Check-in" : "Check-out"} Date
-                    </Text>
-                    <TouchableOpacity onPress={() => setShowDateModal(false)}>
-                        <Ionicons name="close-circle" size={24} color="#94a3b8" />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Month Navigator */}
-                <View className="flex-row justify-between items-center mb-4 px-2">
-                    <TouchableOpacity onPress={() => setCalendarBase(new Date(calendarBase.setMonth(calendarBase.getMonth() - 1)))}>
-                        <Ionicons name="chevron-back" size={24} color="#334155" />
-                    </TouchableOpacity>
-                    <Text className="text-base font-bold text-slate-700">
-                        {calendarBase.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                    </Text>
-                    <TouchableOpacity onPress={() => setCalendarBase(new Date(calendarBase.setMonth(calendarBase.getMonth() + 1)))}>
-                        <Ionicons name="chevron-forward" size={24} color="#334155" />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Calendar Grid */}
-                <View className="mb-2">
-                    <View className="flex-row justify-between mb-2">
-                         {['S','M','T','W','T','F','S'].map((d, i) => (
-                             <Text key={i} className="text-slate-400 font-bold w-[13%] text-center text-xs">{d}</Text>
-                         ))}
-                    </View>
-                    {getMonthMatrix(calendarBase).map((week, wIdx) => (
-                        <View key={wIdx} className="flex-row justify-between mb-2">
-                            {week.map((dayObj, dIdx) => {
-                                const dateStr = `${calendarBase.getFullYear()}-${String(calendarBase.getMonth() + 1 + dayObj.monthOffset).padStart(2, '0')}-${String(dayObj.day).padStart(2, '0')}`;
-                                const isSelected = dateStr === (dateModalTarget === "in" ? localCheckIn : localCheckOut);
-                                
-                                return (
-                                    <TouchableOpacity 
-                                       key={dIdx} 
-                                       disabled={!dayObj.inMonth}
-                                       onPress={() => {
-                                           if (dateModalTarget === "in") setLocalCheckIn(dateStr);
-                                           else setLocalCheckOut(dateStr);
-                                           setShowDateModal(false);
-                                       }}
-                                       className={`w-[13%] aspect-square items-center justify-center rounded-full ${isSelected ? 'bg-blue-600' : ''}`}
-                                    >
-                                        <Text className={`${!dayObj.inMonth ? 'text-transparent' : isSelected ? 'text-white font-bold' : 'text-slate-700 font-medium'}`}>
-                                            {dayObj.day}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    ))}
-                </View>
+          <View className="bg-white w-full rounded-2xl p-4 shadow-2xl">
+            <View className="flex-row justify-between items-center mb-4 pb-4 border-b border-slate-100">
+              <Text className="text-lg font-bold text-slate-800">
+                Select {dateModalTarget === "in" ? "Check-in" : "Check-out"}{" "}
+                Date
+              </Text>
+              <TouchableOpacity onPress={() => setShowDateModal(false)}>
+                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+              </TouchableOpacity>
             </View>
+
+            {/* Month Navigator */}
+            <View className="flex-row justify-between items-center mb-4 px-2">
+              <TouchableOpacity
+                onPress={() =>
+                  setCalendarBase(
+                    new Date(
+                      calendarBase.setMonth(calendarBase.getMonth() - 1),
+                    ),
+                  )
+                }
+              >
+                <Ionicons name="chevron-back" size={24} color="#334155" />
+              </TouchableOpacity>
+              <Text className="text-base font-bold text-slate-700">
+                {calendarBase.toLocaleString("default", {
+                  month: "long",
+                  year: "numeric",
+                })}
+              </Text>
+              <TouchableOpacity
+                onPress={() =>
+                  setCalendarBase(
+                    new Date(
+                      calendarBase.setMonth(calendarBase.getMonth() + 1),
+                    ),
+                  )
+                }
+              >
+                <Ionicons name="chevron-forward" size={24} color="#334155" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Calendar Grid */}
+            <View className="mb-2">
+              <View className="flex-row justify-between mb-2">
+                {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                  <Text
+                    key={i}
+                    className="text-slate-400 font-bold w-[13%] text-center text-xs"
+                  >
+                    {d}
+                  </Text>
+                ))}
+              </View>
+              {getMonthMatrix(calendarBase).map((week, wIdx) => (
+                <View key={wIdx} className="flex-row justify-between mb-2">
+                  {week.map((dayObj, dIdx) => {
+                    const dateStr = `${calendarBase.getFullYear()}-${String(calendarBase.getMonth() + 1 + dayObj.monthOffset).padStart(2, "0")}-${String(dayObj.day).padStart(2, "0")}`;
+                    const isSelected =
+                      dateStr ===
+                      (dateModalTarget === "in" ? localCheckIn : localCheckOut);
+
+                    return (
+                      <TouchableOpacity
+                        key={dIdx}
+                        disabled={!dayObj.inMonth}
+                        onPress={() => {
+                          if (dateModalTarget === "in")
+                            setLocalCheckIn(dateStr);
+                          else setLocalCheckOut(dateStr);
+                          setShowDateModal(false);
+                        }}
+                        className={`w-[13%] aspect-square items-center justify-center rounded-full ${isSelected ? "bg-blue-600" : ""}`}
+                      >
+                        <Text
+                          className={`${!dayObj.inMonth ? "text-transparent" : isSelected ? "text-white font-bold" : "text-slate-700 font-medium"}`}
+                        >
+                          {dayObj.day}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
       </Modal>
-
     </View>
   );
 };

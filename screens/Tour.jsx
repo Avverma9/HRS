@@ -323,25 +323,24 @@ export default function Tour() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right", "bottom"]}>
+      <Header
+        compact
+        showHero={false}
+        showBack
+        leftTitle="Explore Tours"
+        onBackPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+            return;
+          }
+          navigation.navigate("Search");
+        }}
+      />
       <ScrollView
         className="flex-1 bg-slate-100"
         contentContainerStyle={{ paddingBottom: 120 }}
-        stickyHeaderIndices={[1]}
+        stickyHeaderIndices={[0]}
       >
-        <Header
-          compact
-          showHero={false}
-          showBack
-          leftTitle="Explore Tours"
-          onBackPress={() => {
-            if (navigation.canGoBack()) {
-              navigation.goBack();
-              return;
-            }
-            navigation.navigate("Search");
-          }}
-        />
-
         <View className="pt-2 pb-3 bg-slate-100 z-20">
           <View className="mx-3 bg-white rounded-2xl border border-slate-200 px-3 py-2">
             <View className="flex-row items-center justify-between">
@@ -656,4 +655,3 @@ export default function Tour() {
     </SafeAreaView>
   );
 }
-

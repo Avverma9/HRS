@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { fetchAllCabs, filterCabsByQuery } from "../store/slices/cabSlice";
 import CabsSkeleton from "../components/skeleton/CabsSkeleton";
@@ -114,8 +113,7 @@ const matchesCabSearchQuery = (cab, query) => {
   );
 };
 
-export default function Cabs() {
-  const navigation = useNavigation();
+export default function Cabs({ navigation }) {
   const dispatch = useDispatch();
   const { items: cabItems, status, error } = useSelector((s) => s.cab || {});
 
@@ -254,30 +252,29 @@ export default function Cabs() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right", "bottom"]}>
+      <Header
+        compact
+        showHero={false}
+        showBack
+        leftTitle="Book Your Ride"
+        onBackPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+            return;
+          }
+          navigation.navigate("Search");
+        }}
+      />
       <ScrollView
         className="flex-1 bg-slate-50"
         contentContainerStyle={{ paddingBottom: 30 }}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[1]} // Index 1 is the sticky filter
+        stickyHeaderIndices={[1]} // Index 1 is the sticky filter dock
       >
         {/* ========================================== */}
-        {/* INDEX 0: HEADER & SEARCH CARD              */}
+        {/* INDEX 0: SEARCH CARD                        */}
         {/* ========================================== */}
         <View className="bg-slate-100 border-b border-slate-200">
-          <Header
-            compact
-            showHero={false}
-            showBack
-            leftTitle="Book Your Ride"
-            onBackPress={() => {
-              if (navigation.canGoBack()) {
-                navigation.goBack();
-                return;
-              }
-              navigation.navigate("Search");
-            }}
-          />
-
           {/* Overlapping Search Card */}
           <View className="mt-3 mx-4 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm elevation-3">
             

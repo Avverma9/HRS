@@ -33,13 +33,13 @@
         "READ_CONTACTS",
         "READ_PHONE_STATE",
         "READ_PHONE_NUMBERS",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "READ_CONTACTS",
-        "READ_PHONE_STATE",
-        "READ_PHONE_NUMBERS"
+        "POST_NOTIFICATIONS"
       ],
       "package": "com.anonymous.restra"
+    },
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#0d3b8f"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -48,7 +48,8 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ]
   }
 }

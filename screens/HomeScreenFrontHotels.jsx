@@ -14,7 +14,14 @@ import { useDispatch, useSelector } from "react-redux";
 import { frontHotels } from "../store/slices/hotelSlice";
 import { Ionicons } from "@expo/vector-icons";
 import HomeScreenFrontHotelsSkeleton from "../components/skeleton/HomeScreenFrontHotelsSkeleton";
-import { extractHotelAmenities, getTopHotelAmenities } from "../utils/amenities";
+import {
+  extractHotelAmenities,
+  getTopHotelAmenities,
+} from "../utils/amenities";
+import {
+  getHotelOfferSummary,
+  getHotelStartingPrice,
+} from "../utils/hotelOffers";
 
 // ---------- helpers ----------
 const safeText = (v, fallback = "") =>
@@ -22,13 +29,6 @@ const safeText = (v, fallback = "") =>
 
 const getFirstImage = (hotel) =>
   hotel?.images?.[0] || hotel?.rooms?.[0]?.images?.[0] || "";
-
-const getMinPrice = (hotel) => {
-  const prices = (hotel?.rooms || [])
-    .map((r) => Number(r?.price))
-    .filter((p) => Number.isFinite(p) && p > 0);
-  return prices.length ? Math.min(...prices) : null;
-};
 
 const formatRating = (r) => {
   const n = Number(r);
@@ -54,7 +54,7 @@ function TinyFireIcon() {
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
 
     pulse.start();
@@ -73,11 +73,22 @@ const HotelCard = ({ hotel, onPress, fallbackAmenities = [] }) => {
   const city = safeText(hotel?.city, "Location");
   const rating = formatRating(hotel?.rating);
   const img = getFirstImage(hotel);
-  const price = getMinPrice(hotel) || 1500;
+  const offerSummary = getHotelOfferSummary(hotel);
+  const hasOffer = offerSummary.hasOffer;
+  const startingPrice = getHotelStartingPrice(hotel) || 1500;
+  const finalPrice =
+    (hasOffer ? offerSummary.finalPrice : startingPrice) || startingPrice;
+  const originalPrice = hasOffer
+    ? Math.max(offerSummary.originalPrice || 0, finalPrice)
+    : Math.round(startingPrice * 1.35);
+  const discountAmount = hasOffer
+    ? Math.max(offerSummary.discountAmount || 0, originalPrice - finalPrice)
+    : 0;
   const cardAmenities = getTopHotelAmenities(hotel, 3);
-  const topAmenities = [...cardAmenities, ...fallbackAmenities.filter((a) => !cardAmenities.includes(a))].slice(0, 3);
-  // Calculate a fake "original" price for display purposes (e.g. +20-40%)
-  const originalPrice = Math.round(price * 1.35);
+  const topAmenities = [
+    ...cardAmenities,
+    ...fallbackAmenities.filter((a) => !cardAmenities.includes(a)),
+  ].slice(0, 3);
 
   return (
     <TouchableOpacity
@@ -89,14 +100,20 @@ const HotelCard = ({ hotel, onPress, fallbackAmenities = [] }) => {
         {/* Image */}
         <View className="relative">
           {img ? (
-            <Image 
-              source={{ uri: img }} 
-              className="w-full h-40 bg-slate-200" 
-              resizeMode="cover" 
+            <Image
+              source={{ uri: img }}
+              className="w-full h-40 bg-slate-200"
+              resizeMode="cover"
             />
           ) : (
             <View className="w-full h-40 bg-slate-200 items-center justify-center">
               <Ionicons name="image-outline" size={32} color="#cbd5e1" />
+            </View>
+          )}
+
+          {hasOffer && (
+            <View className="absolute top-2 right-2 px-2 py-1 rounded-full bg-rose-600 border border-rose-700">
+              <Text className="text-[10px] text-white font-black">Offer</Text>
             </View>
           )}
         </View>
@@ -105,24 +122,34 @@ const HotelCard = ({ hotel, onPress, fallbackAmenities = [] }) => {
         <View className="px-3 pt-3">
           {/* Title & Rating Row */}
           <View className="flex-row items-start justify-between">
-            <Text 
-              className="text-slate-900 font-bold text-[16px] flex-1 mr-2 leading-tight" 
+            <Text
+              className="text-slate-900 font-bold text-[16px] flex-1 mr-2 leading-tight"
               numberOfLines={1}
             >
               {title}
             </Text>
-            
+
             {/* Rating Badge */}
             <View className="bg-green-600 px-1.5 py-0.5 rounded flex-row items-center shadow-sm">
-              <Text className="text-white font-bold text-[11px] mr-0.5">{rating}</Text>
+              <Text className="text-white font-bold text-[11px] mr-0.5">
+                {rating}
+              </Text>
               <Ionicons name="star" size={9} color="white" />
             </View>
           </View>
 
           {/* Location Row */}
           <View className="flex-row items-center mt-1">
-            <Ionicons name="location-outline" size={13} color="#94a3b8" style={{marginLeft: -2}} />
-            <Text className="text-slate-500 text-[12px] font-medium ml-0.5" numberOfLines={1}>
+            <Ionicons
+              name="location-outline"
+              size={13}
+              color="#94a3b8"
+              style={{ marginLeft: -2 }}
+            />
+            <Text
+              className="text-slate-500 text-[12px] font-medium ml-0.5"
+              numberOfLines={1}
+            >
               {city}
             </Text>
           </View>
@@ -134,7 +161,10 @@ const HotelCard = ({ hotel, onPress, fallbackAmenities = [] }) => {
                   key={`${amenity}-${idx}`}
                   className="px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200"
                 >
-                  <Text className="text-[10px] font-bold text-slate-600" numberOfLines={1}>
+                  <Text
+                    className="text-[10px] font-bold text-slate-600"
+                    numberOfLines={1}
+                  >
                     {amenity}
                   </Text>
                 </View>
@@ -145,12 +175,29 @@ const HotelCard = ({ hotel, onPress, fallbackAmenities = [] }) => {
           {/* Price Row */}
           <View className="flex-row items-baseline mt-3">
             <Text className="text-[#0d3b8f] font-extrabold text-[18px]">
-              ₹{price.toLocaleString()}
+              ₹{Math.round(finalPrice).toLocaleString()}
             </Text>
-            <Text className="text-slate-400 text-[12px] font-medium line-through ml-2">
-              ₹{originalPrice.toLocaleString()}
-            </Text>
+            {hasOffer && (
+              <Text className="text-slate-400 text-[12px] font-medium line-through ml-2">
+                ₹{Math.round(originalPrice).toLocaleString()}
+              </Text>
+            )}
           </View>
+          {hasOffer && (
+            <View className="mt-1 flex-row items-center">
+              <Text className="text-[11px] font-black text-rose-600">
+                Save ₹{Math.round(discountAmount).toLocaleString()}
+              </Text>
+              {!!offerSummary.offerName && (
+                <Text
+                  className="text-[11px] font-semibold text-rose-500 ml-2"
+                  numberOfLines={1}
+                >
+                  {offerSummary.offerName}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -161,7 +208,11 @@ export default function HomeScreenFrontHotels() {
   const navigation = useContext(NavigationContext);
   const dispatch = useDispatch();
   // Use separate featured* state properties
-  const { featuredData: hotelsRaw, featuredLoading: loading, featuredError: error } = useSelector((state) => state.hotel);
+  const {
+    featuredData: hotelsRaw,
+    featuredLoading: loading,
+    featuredError: error,
+  } = useSelector((state) => state.hotel);
 
   useEffect(() => {
     dispatch(frontHotels());
@@ -169,31 +220,38 @@ export default function HomeScreenFrontHotels() {
 
   const handleNavigate = (hotelId) => {
     if (navigation) {
-        navigation.navigate("HotelDetails", { hotelId });
+      navigation.navigate("HotelDetails", { hotelId });
     } else {
-        console.warn("Navigation context is missing in HomeScreenFrontHotels");
+      console.warn("Navigation context is missing in HomeScreenFrontHotels");
     }
   };
 
   const handleNavigateAll = () => {
     if (navigation) {
-        const parentNavigation = navigation.getParent?.();
-        if (parentNavigation) {
-          parentNavigation.navigate("HotelsTab", {
-            screen: "Hotels",
-            params: { showAll: true },
-          });
-          return;
-        }
+      const parentNavigation = navigation.getParent?.();
+      if (parentNavigation) {
+        parentNavigation.navigate("HotelsTab", {
+          screen: "Hotels",
+          params: { showAll: true },
+        });
+        return;
+      }
 
-        navigation.navigate("Hotels", { showAll: true });
+      navigation.navigate("Hotels", { showAll: true });
     }
   };
 
-  const hotels = useMemo(() => (Array.isArray(hotelsRaw) ? hotelsRaw : []), [hotelsRaw]);
+  const hotels = useMemo(
+    () => (Array.isArray(hotelsRaw) ? hotelsRaw : []),
+    [hotelsRaw],
+  );
   const fallbackAmenities = useMemo(() => {
     const amenityPool = hotels.flatMap((hotel) => extractHotelAmenities(hotel));
-    return [...new Set(amenityPool.map((item) => String(item || "").trim()).filter(Boolean))];
+    return [
+      ...new Set(
+        amenityPool.map((item) => String(item || "").trim()).filter(Boolean),
+      ),
+    ];
   }, [hotels]);
 
   return (
@@ -231,7 +289,10 @@ export default function HomeScreenFrontHotels() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10 }}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+            }}
           >
             <HomeScreenFrontHotelsSkeleton />
             <HomeScreenFrontHotelsSkeleton />
