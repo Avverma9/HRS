@@ -15,9 +15,9 @@ import {
   fetchTourList,
   filterToursByQuery,
 } from "../store/slices/tourSlice";
-import { useNavigation } from "@react-navigation/native";
 import { TourCardSkeleton } from "../components/skeleton/TourSkeleton";
 import Header from "../components/Header";
+import { router } from "../utils/navigation";
 
 const toNumber = (value) => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -164,8 +164,8 @@ function TourCard({ tour, onPressDetails }) {
   );
 }
 
-export default function Tour() {
-  const navigation = useNavigation();
+export default function Tour({ navigation }) {
+  const nav = navigation || router;
   const dispatch = useDispatch();
   const tourState = useSelector((state) => state.tour);
 
@@ -318,7 +318,7 @@ export default function Tour() {
 
   const handleViewDetails = (tourId) => {
     if (!tourId) return;
-    navigation.navigate("TourDetails", { tourId });
+    nav.navigate("TourDetails", { tourId });
   };
 
   return (
@@ -329,11 +329,11 @@ export default function Tour() {
         showBack
         leftTitle="Explore Tours"
         onBackPress={() => {
-          if (navigation.canGoBack()) {
-            navigation.goBack();
+          if (typeof nav?.canGoBack === "function" && nav.canGoBack()) {
+            nav.goBack();
             return;
           }
-          navigation.navigate("Search");
+          nav.navigate("Search");
         }}
       />
       <ScrollView

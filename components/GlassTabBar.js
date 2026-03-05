@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,7 +10,7 @@ export default function TabBar({ state, descriptors, navigation }) {
     <View 
       className="bg-white border-t border-gray-200"
       style={{ 
-        paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8 
+        paddingBottom: Math.max(insets.bottom, 8)
       }}
     >
       <View className="flex-row justify-around items-center h-16 px-4">

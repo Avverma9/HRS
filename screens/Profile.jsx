@@ -46,6 +46,7 @@ import {
 import HotelBookingsDetailModal from "../components/HotelBookingsDetailModal";
 import TourBookingDetailsModal from "../components/TourBookingDetailsModal";
 import { getUserId } from "../utils/credentials";
+import { router } from "../utils/navigation";
 
 const TABS = ["Bookings", "Coupons", "Complaints", "Profile"];
 const BOOKING_TYPES = ["Tour", "Cabs", "Hotel"];
@@ -361,7 +362,7 @@ const BookingCard = ({ item, onViewBooking }) => {
   );
 };
 
-const Profile = ({ navigation }) => {
+const Profile = () => {
   const dispatch = useDispatch();
   const { signOut } = useAuth();
 
@@ -622,11 +623,11 @@ const Profile = ({ navigation }) => {
   };
 
   const handleProfileHeaderBack = () => {
-    if (navigation?.canGoBack?.()) {
-      navigation.goBack();
+    if (router.isReady() && router.canGoBack?.()) {
+      router.goBack();
       return;
     }
-    navigation?.navigate?.("Search");
+    router.navigate("Search");
   };
 
   const handlePickImages = async () => {
@@ -1410,7 +1411,7 @@ const renderCoupons = () => (
     selectedBookingType === "Tour" || Boolean(selectedBooking?.tourId);
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right"]}>
       <View className="flex-1">
         <Header
           compact

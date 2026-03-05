@@ -10,7 +10,6 @@ import {
   UIManager,
   View,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Header from "../components/Header";
@@ -132,11 +131,19 @@ export default function Notifications({ navigation }) {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    if (!navigation?.addListener) return undefined;
+
+    const unsubscribe = navigation.addListener("focus", () => {
       fetchNotifications();
-    }, [fetchNotifications]),
-  );
+    });
+
+    return unsubscribe;
+  }, [navigation, fetchNotifications]);
 
   const handleNotificationPress = useCallback(
     async (item) => {

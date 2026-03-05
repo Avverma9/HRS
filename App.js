@@ -9,13 +9,14 @@ import { Provider, useDispatch } from "react-redux";
 import { resetAppState, store } from "./store";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import {
   Text,
   View,
   ActivityIndicator,
-  Platform,
   TouchableOpacity,
+  LogBox,
 } from "react-native";
 import {
   SafeAreaProvider,
@@ -30,6 +31,7 @@ import { requestStartupPermissionsIfNeeded } from "./utils/startupPermissions";
 import { baseURL } from "./utils/baseUrl";
 import {
   addNotificationResponseListener,
+  clearLastNotificationResponseAsync,
   getLastNotificationResponseAsync,
   isPushNotificationsSupported,
   registerForPushNotificationsAsync,
@@ -68,6 +70,12 @@ const SearchStack = createNativeStackNavigator();
 const HotelStack = createNativeStackNavigator();
 const HEALTH_POLL_INTERVAL_MS = 8000;
 const HEALTH_TIMEOUT_MS = 5000;
+const LAST_HANDLED_NOTIFICATION_RESPONSE_KEY =
+  "@hrs:last-handled-notification-response-id";
+
+LogBox.ignoreLogs([
+  "SafeAreaView has been deprecated and will be removed in a future release.",
+]);
 
 // Professional Tab Bar Component
 function TabBar({ state, descriptors, navigation }) {
@@ -87,7 +95,7 @@ function TabBar({ state, descriptors, navigation }) {
   return (
     <View
       className="bg-white border-t border-gray-200"
-      style={{ paddingBottom: Platform.OS === "ios" ? insets.bottom : 8 }}
+      style={{ paddingBottom: Math.max(insets.bottom, 8) }}
     >
       <View className="flex-row justify-around items-center h-16 px-2">
         {state.routes.map((route, index) => {
@@ -190,6 +198,7 @@ function HotelStackNavigator() {
 function TabNavigator() {
   return (
     <Tab.Navigator
+      detachInactiveScreens={false}
       screenOptions={{ headerShown: false }}
       tabBar={(props) => <TabBar {...props} />}
     >
@@ -305,6 +314,7 @@ function HealthAwareNavigator() {
   const mountedRef = useRef(true);
   const pushTokenSyncedUserRef = useRef("");
   const notificationResponseSubscriptionRef = useRef(null);
+  const lastHandledNotificationResponseIdRef = useRef("");
 
   const refetchGlobalData = useCallback(async () => {
     dispatch(fetchLocation());
@@ -433,18 +443,88 @@ function HealthAwareNavigator() {
 
     let cancelled = false;
 
-    const navigateFromResponse = (response) => {
-      const route = resolveNotificationRoute(response);
-      if (!route?.name) return;
-      if (navigationRef.isReady()) {
-        navigationRef.navigate(route.name, route.params);
+    const getResponseId = (response) => {
+      const requestId = response?.notification?.request?.identifier;
+      const notificationDate = response?.notification?.date;
+      const actionId = response?.actionIdentifier || "default";
+      if (!requestId) {
+        return notificationDate
+          ? `${actionId}:date:${String(notificationDate)}`
+          : "";
       }
+      return `${actionId}:${requestId}`;
+    };
+
+    const markResponseHandled = async (responseId) => {
+      if (!responseId) return;
+      lastHandledNotificationResponseIdRef.current = responseId;
+
+      try {
+        await AsyncStorage.setItem(
+          LAST_HANDLED_NOTIFICATION_RESPONSE_KEY,
+          responseId,
+        );
+      } catch {
+        // no-op
+      }
+    };
+
+    const clearLastResponse = async () => {
+      try {
+        await clearLastNotificationResponseAsync();
+      } catch {
+        // no-op
+      }
+    };
+
+    const handleNotificationResponse = async (response, retryCount = 0) => {
+      if (!response || cancelled) return;
+
+      const responseId = getResponseId(response);
+      if (
+        responseId &&
+        lastHandledNotificationResponseIdRef.current &&
+        responseId === lastHandledNotificationResponseIdRef.current
+      ) {
+        await clearLastResponse();
+        return;
+      }
+
+      const route = resolveNotificationRoute(response);
+      if (!route?.name) {
+        await clearLastResponse();
+        return;
+      }
+
+      if (!navigationRef.isReady()) {
+        if (retryCount < 20) {
+          setTimeout(() => {
+            if (!cancelled) {
+              void handleNotificationResponse(response, retryCount + 1);
+            }
+          }, 120);
+        }
+        return;
+      }
+
+      navigationRef.navigate(route.name, route.params);
+      await markResponseHandled(responseId);
+      await clearLastResponse();
     };
 
     const wireNotificationHandlers = async () => {
       try {
+        const savedResponseId = await AsyncStorage.getItem(
+          LAST_HANDLED_NOTIFICATION_RESPONSE_KEY,
+        );
+        if (!cancelled) {
+          lastHandledNotificationResponseIdRef.current = savedResponseId || "";
+        }
+
         const subscription =
-          await addNotificationResponseListener(navigateFromResponse);
+          await addNotificationResponseListener((response) => {
+            void handleNotificationResponse(response);
+          });
         if (cancelled) {
           subscription?.remove?.();
           return;
@@ -454,7 +534,7 @@ function HealthAwareNavigator() {
 
         const response = await getLastNotificationResponseAsync();
         if (!cancelled && response) {
-          navigateFromResponse(response);
+          await handleNotificationResponse(response);
         }
       } catch {
         // no-op
@@ -470,22 +550,18 @@ function HealthAwareNavigator() {
     };
   }, []);
 
-  if (healthStatus === "down") {
-    return (
-      <ServerUnavailable
-        onRetry={() => checkHealth({ isManual: true })}
-        isRetrying={isRetrying}
-      />
-    );
-  }
-
-  if (healthStatus !== "up") {
-    return <LoadingScreen />;
-  }
-
   return (
     <NavigationContainer key={`nav-${navigationReloadKey}`} ref={navigationRef}>
-      <RootNavigator />
+      {healthStatus === "down" ? (
+        <ServerUnavailable
+          onRetry={() => checkHealth({ isManual: true })}
+          isRetrying={isRetrying}
+        />
+      ) : healthStatus !== "up" ? (
+        <LoadingScreen />
+      ) : (
+        <RootNavigator />
+      )}
     </NavigationContainer>
   );
 }

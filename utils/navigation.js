@@ -4,6 +4,17 @@ export const navigationRef = createNavigationContainerRef();
 
 export const router = {
   isReady: () => navigationRef.isReady(),
+  canGoBack: () => {
+    if (!navigationRef.isReady() || typeof navigationRef.canGoBack !== "function") {
+      return false;
+    }
+    return navigationRef.canGoBack();
+  },
+  goBack: () => {
+    if (navigationRef.isReady() && typeof navigationRef.goBack === "function") {
+      navigationRef.goBack();
+    }
+  },
   navigate: (name, params) => {
     if (navigationRef.isReady()) navigationRef.navigate(name, params);
   },

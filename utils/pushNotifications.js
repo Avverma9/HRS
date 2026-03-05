@@ -107,6 +107,17 @@ export const getLastNotificationResponseAsync = async () => {
   return Notifications.getLastNotificationResponseAsync();
 };
 
+export const clearLastNotificationResponseAsync = async () => {
+  if (!isPushNotificationsSupported()) return;
+
+  const Notifications = await getNotificationsModule();
+  if (typeof Notifications.clearLastNotificationResponseAsync !== "function") {
+    return;
+  }
+
+  await Notifications.clearLastNotificationResponseAsync();
+};
+
 export const syncPushTokenWithServer = async ({ userId, pushToken }) => {
   if (!userId || !pushToken) return { ok: false };
 
