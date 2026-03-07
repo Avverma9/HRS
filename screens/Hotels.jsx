@@ -388,8 +388,11 @@ const Hotels = ({ navigation, route }) => {
         onPress={openHotelDetails}
         className="mx-4 mb-2.5 bg-white rounded-xl border border-slate-200 p-2"
       >
-        <View className="flex-row h-[120px]">
-          <View className="w-[98px] h-[120px] rounded-[10px] overflow-hidden bg-slate-200 relative">
+        <View className="flex-row" style={{ minHeight: 120 }}>
+          <View
+            className="w-[98px] rounded-[10px] overflow-hidden bg-slate-200 relative"
+            style={{ height: 120 }}
+          >
             {mainImage ? (
               <Image
                 source={{ uri: mainImage }}
@@ -416,8 +419,11 @@ const Hotels = ({ navigation, route }) => {
             )}
           </View>
 
-          <View className="flex-1 ml-2.5 justify-between">
-            <View>
+          <View
+            className="flex-1 ml-2.5 justify-between"
+            style={{ minWidth: 0 }}
+          >
+            <View style={{ minWidth: 0 }}>
               <Text
                 className="text-[13px] leading-[16px] font-black text-slate-900"
                 numberOfLines={2}
@@ -430,6 +436,7 @@ const Hotels = ({ navigation, route }) => {
                 <Text
                   className="text-[11px] font-semibold text-slate-600 ml-1"
                   numberOfLines={1}
+                  style={{ flexShrink: 1 }}
                 >
                   {city}
                 </Text>
@@ -440,10 +447,13 @@ const Hotels = ({ navigation, route }) => {
                   <View
                     key={`${amenity}-${idx}`}
                     className="px-1.5 py-0.5 rounded-full bg-slate-50 border border-slate-200"
+                    style={{ flexShrink: 1, maxWidth: "100%" }}
                   >
                     <Text
                       className="text-[9px] font-extrabold text-slate-600"
                       numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={{ flexShrink: 1 }}
                     >
                       {amenity}
                     </Text>
@@ -453,7 +463,7 @@ const Hotels = ({ navigation, route }) => {
             </View>
 
             <View className="flex-row items-end justify-between mt-1">
-              <View className="flex-1 pr-2">
+              <View className="flex-1 pr-2" style={{ minWidth: 0 }}>
                 <Text className="text-[8px] font-black tracking-wider text-slate-400">
                   STARTING FROM
                 </Text>
@@ -469,7 +479,10 @@ const Hotels = ({ navigation, route }) => {
                   </Text>
                 </View>
                 {hasOffer && displayOriginalPrice > displayFinalPrice && (
-                  <View className="flex-row items-center mt-[1px]">
+                  <View
+                    className="flex-row flex-wrap items-center mt-[1px]"
+                    style={{ rowGap: 2 }}
+                  >
                     <Text className="text-[10px] font-bold text-slate-400 line-through">
                       {`\u20B9${Math.round(displayOriginalPrice).toLocaleString("en-IN")}`}
                     </Text>
@@ -485,7 +498,8 @@ const Hotels = ({ navigation, route }) => {
                 {hasOffer && !!offerSummary.offerName && (
                   <Text
                     className="text-[10px] font-semibold text-rose-600 mt-[1px]"
-                    numberOfLines={1}
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
                   >
                     {offerSummary.offerName}
                   </Text>

@@ -46,7 +46,6 @@ import {
 import HotelBookingsDetailModal from "../components/HotelBookingsDetailModal";
 import TourBookingDetailsModal from "../components/TourBookingDetailsModal";
 import { getUserId } from "../utils/credentials";
-import { router } from "../utils/navigation";
 
 const TABS = ["Bookings", "Coupons", "Complaints", "Profile"];
 const BOOKING_TYPES = ["Tour", "Cabs", "Hotel"];
@@ -362,7 +361,7 @@ const BookingCard = ({ item, onViewBooking }) => {
   );
 };
 
-const Profile = () => {
+const Profile = ({ navigation }) => {
   const dispatch = useDispatch();
   const { signOut } = useAuth();
 
@@ -623,11 +622,24 @@ const Profile = () => {
   };
 
   const handleProfileHeaderBack = () => {
-    if (router.isReady() && router.canGoBack?.()) {
-      router.goBack();
+    if (navigation?.canGoBack?.()) {
+      navigation.goBack();
       return;
     }
-    router.navigate("Search");
+
+    navigation?.navigate?.("Search", {
+      screen: "Home",
+    });
+  };
+
+  const handleOpenNotifications = () => {
+    const parentNavigation = navigation?.getParent?.();
+    if (parentNavigation?.navigate) {
+      parentNavigation.navigate("Notifications");
+      return;
+    }
+
+    navigation?.navigate?.("Notifications");
   };
 
   const handlePickImages = async () => {
@@ -990,7 +1002,7 @@ const Profile = () => {
                           <View className="flex-row items-center">
                             <Ionicons name="navigate-outline" size={14} color="#64748b" />
                             <Text className="text-xs text-slate-700 ml-2" numberOfLines={1}>
-                              {item?.pickupP || "-"} -> {item?.dropP || "-"}
+                              {item?.pickupP || "-"} {"\u2192"} {item?.dropP || "-"}
                             </Text>
                           </View>
                           <View className="flex-row items-center justify-between mt-2">
@@ -1420,6 +1432,7 @@ const renderCoupons = () => (
           showBack
           leftTitle="Profile Settings"
           onBackPress={handleProfileHeaderBack}
+          onNotificationPress={handleOpenNotifications}
         />
 
         {userState?.loading ? (
@@ -1464,7 +1477,9 @@ const renderCoupons = () => (
               <TouchableOpacity
                 key={tab}
                 className="flex-1 items-center justify-center py-3"
-                onPress={() => setActiveTab(tab)}
+                onPress={() => {
+                  if (!active) setActiveTab(tab);
+                }}
               >
                 <Text className={`text-xs font-bold ${active ? "text-blue-900" : "text-slate-400"}`}>{tab}</Text>
                 {active && <View className="absolute bottom-0 w-16 h-0.5 bg-blue-900 rounded-t-full" />}

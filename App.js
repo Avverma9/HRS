@@ -176,7 +176,15 @@ function SearchStackNavigator() {
       <SearchStack.Screen name="Home" component={Home} />
       <SearchStack.Screen name="Hotels" component={Hotels} />
       <SearchStack.Screen name="HotelDetails" component={HotelDetails} />
-      <SearchStack.Screen name="PolicyScreen" component={PolicyScreen} />
+      <SearchStack.Screen
+        name="PolicyScreen"
+        component={PolicyScreen}
+        options={{
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
     </SearchStack.Navigator>
   );
 }
@@ -190,7 +198,15 @@ function HotelStackNavigator() {
         initialParams={{ showAll: true }}
       />
       <HotelStack.Screen name="HotelDetails" component={HotelDetails} />
-      <HotelStack.Screen name="PolicyScreen" component={PolicyScreen} />
+      <HotelStack.Screen
+        name="PolicyScreen"
+        component={PolicyScreen}
+        options={{
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
     </HotelStack.Navigator>
   );
 }
@@ -521,10 +537,11 @@ function HealthAwareNavigator() {
           lastHandledNotificationResponseIdRef.current = savedResponseId || "";
         }
 
-        const subscription =
-          await addNotificationResponseListener((response) => {
+        const subscription = await addNotificationResponseListener(
+          (response) => {
             void handleNotificationResponse(response);
-          });
+          },
+        );
         if (cancelled) {
           subscription?.remove?.();
           return;

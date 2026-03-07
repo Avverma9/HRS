@@ -149,21 +149,29 @@ const HotelCard = ({ hotel, onPress, fallbackAmenities = [] }) => {
             <Text
               className="text-slate-500 text-[12px] font-medium ml-0.5"
               numberOfLines={1}
+              style={{ flexShrink: 1 }}
             >
               {city}
             </Text>
           </View>
 
           {!!topAmenities.length && (
-            <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
+            <View className="flex-row mt-2 overflow-hidden">
               {topAmenities.map((amenity, idx) => (
                 <View
                   key={`${amenity}-${idx}`}
                   className="px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200"
+                  style={{
+                    maxWidth: "31.5%",
+                    flexShrink: 1,
+                    marginRight: idx < topAmenities.length - 1 ? 6 : 0,
+                  }}
                 >
                   <Text
                     className="text-[10px] font-bold text-slate-600"
                     numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={{ flexShrink: 1 }}
                   >
                     {amenity}
                   </Text>
@@ -192,6 +200,8 @@ const HotelCard = ({ hotel, onPress, fallbackAmenities = [] }) => {
                 <Text
                   className="text-[11px] font-semibold text-rose-500 ml-2"
                   numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={{ flexShrink: 1 }}
                 >
                   {offerSummary.offerName}
                 </Text>

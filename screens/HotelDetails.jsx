@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -113,8 +119,10 @@ const normalizeBool = (value) => {
   if (typeof value === "number") return value > 0;
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    if (normalized === "true" || normalized === "yes" || normalized === "1") return true;
-    if (normalized === "false" || normalized === "no" || normalized === "0") return false;
+    if (normalized === "true" || normalized === "yes" || normalized === "1")
+      return true;
+    if (normalized === "false" || normalized === "no" || normalized === "0")
+      return false;
   }
   return null;
 };
@@ -126,14 +134,6 @@ const toList = (value) => {
 };
 
 const toDateOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-const formatShortDate = (d) => {
-  try {
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
-  } catch {
-    return "";
-  }
-};
 
 const formatFullDate = (d) => {
   try {
@@ -156,7 +156,11 @@ const getMonthMatrix = (date) => {
   const weeks = [];
   let week = [];
 
-  const prevMonthEnd = new Date(date.getFullYear(), date.getMonth(), 0).getDate();
+  const prevMonthEnd = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    0,
+  ).getDate();
 
   for (let i = 0; i < startWeekday; i++) {
     week.push({
@@ -208,7 +212,8 @@ const extractFoods = (hotel) => {
   if (direct?.items && Array.isArray(direct.items)) return direct.items;
 
   // If your API returns categories
-  if (direct?.categories && Array.isArray(direct.categories)) return direct.categories;
+  if (direct?.categories && Array.isArray(direct.categories))
+    return direct.categories;
 
   return [];
 };
@@ -272,16 +277,19 @@ const HotelDetails = ({ navigation, route }) => {
   const userState = useSelector((state) => state.user);
   const user = userState?.user || userState?.data || null;
 
-  const [checkInDate, setCheckInDate] = useState(paramCheckIn ? new Date(paramCheckIn) : new Date());
+  const [checkInDate, setCheckInDate] = useState(
+    paramCheckIn ? new Date(paramCheckIn) : new Date(),
+  );
   const [checkOutDate, setCheckOutDate] = useState(
-    paramCheckOut ? new Date(paramCheckOut) : new Date(Date.now() + 86400000)
+    paramCheckOut ? new Date(paramCheckOut) : new Date(Date.now() + 86400000),
   );
 
   const initialGuestsCount = clamp(Number(paramGuests) || 2, 1, MAX_GUESTS);
-  const requiredRoomsForInitialGuests = getRequiredRoomsForGuests(initialGuestsCount);
+  const requiredRoomsForInitialGuests =
+    getRequiredRoomsForGuests(initialGuestsCount);
   const initialRoomsCount = Math.max(
     clamp(Number(paramRooms) || 1, 1, MAX_ROOMS),
-    requiredRoomsForInitialGuests
+    requiredRoomsForInitialGuests,
   );
 
   const [guestsCount, setGuestsCount] = useState(initialGuestsCount);
@@ -315,9 +323,11 @@ const HotelDetails = ({ navigation, route }) => {
   }, [dispatch, hotelId]);
 
   useEffect(() => {
-    if ((user?.userName || user?.name) && !guestName) setGuestName(user?.userName || user?.name);
+    if ((user?.userName || user?.name) && !guestName)
+      setGuestName(user?.userName || user?.name);
     if (user?.email && !guestEmail) setGuestEmail(user.email);
-    if ((user?.mobile || user?.phone) && !guestPhone) setGuestPhone(user?.mobile || user?.phone);
+    if ((user?.mobile || user?.phone) && !guestPhone)
+      setGuestPhone(user?.mobile || user?.phone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -335,7 +345,7 @@ const HotelDetails = ({ navigation, route }) => {
       room?.roomType?._id ??
       room?.roomType?.id ??
       null,
-    []
+    [],
   );
 
   const getRoomAvailabilityMeta = useCallback((room) => {
@@ -353,7 +363,8 @@ const HotelDetails = ({ navigation, route }) => {
     ];
 
     const rawAvailable = availabilityCandidates.find(
-      (value) => value !== undefined && value !== null && String(value).trim() !== ""
+      (value) =>
+        value !== undefined && value !== null && String(value).trim() !== "",
     );
     const hasExplicitAvailable = rawAvailable !== undefined;
     const availableCount = hasExplicitAvailable ? parseNumber(rawAvailable) : 0;
@@ -364,7 +375,7 @@ const HotelDetails = ({ navigation, route }) => {
       normalizeBool(room?.soldOut);
 
     const statusText = String(
-      room?.inventory?.status || room?.status || room?.availabilityStatus || ""
+      room?.inventory?.status || room?.status || room?.availabilityStatus || "",
     )
       .trim()
       .toLowerCase();
@@ -376,15 +387,15 @@ const HotelDetails = ({ navigation, route }) => {
     const soldOut = hasExplicitAvailable
       ? availableCount <= 0
       : soldOutFlag !== null
-      ? soldOutFlag
-      : statusSaysSoldOut;
+        ? soldOutFlag
+        : statusSaysSoldOut;
 
     return { soldOut, availableCount, hasExplicitAvailable };
   }, []);
 
   const isRoomSoldOut = useCallback(
     (room) => getRoomAvailabilityMeta(room).soldOut,
-    [getRoomAvailabilityMeta]
+    [getRoomAvailabilityMeta],
   );
 
   // âœ… Monthly override picker (your monthlyData sample supported)
@@ -407,7 +418,12 @@ const HotelDetails = ({ navigation, route }) => {
     // If dates are missing, treat as always applicable for that room.
     const validOverride = relevantOverrides.find((entry) => {
       if (!entry?.startDate || !entry?.endDate) return true;
-      return dateRangesOverlap(bookingStart, bookingEnd, entry.startDate, entry.endDate);
+      return dateRangesOverlap(
+        bookingStart,
+        bookingEnd,
+        entry.startDate,
+        entry.endDate,
+      );
     });
 
     return validOverride || null;
@@ -454,18 +470,81 @@ const HotelDetails = ({ navigation, route }) => {
   // âœ… Integrate hotelData response shapes
   const basicInfo = hotel?.basicInfo || {};
   const pricingOverview = hotel?.pricingOverview || {};
-  const rawPolicies = hotel?.policies;
+  const rawPolicies =
+    hotel?.policies ??
+    basicInfo?.policies ??
+    hotel?.policy ??
+    basicInfo?.policy ??
+    null;
   const policies = useMemo(() => {
-    if (Array.isArray(rawPolicies)) {
-      const firstObjectPolicy = rawPolicies.find(
-        (entry) => entry && typeof entry === "object" && !Array.isArray(entry),
-      );
-      return firstObjectPolicy || {};
-    }
-    if (rawPolicies && typeof rawPolicies === "object") {
-      return rawPolicies;
-    }
-    return {};
+    const mergePolicyValues = (existingValue, nextValue) => {
+      if (nextValue === undefined || nextValue === null || nextValue === "") {
+        return existingValue;
+      }
+      if (
+        existingValue === undefined ||
+        existingValue === null ||
+        existingValue === ""
+      ) {
+        return nextValue;
+      }
+
+      const existingIsArray = Array.isArray(existingValue);
+      const nextIsArray = Array.isArray(nextValue);
+      if (existingIsArray || nextIsArray) {
+        return [
+          ...(existingIsArray ? existingValue : [existingValue]),
+          ...(nextIsArray ? nextValue : [nextValue]),
+        ].filter((item) => item !== undefined && item !== null && item !== "");
+      }
+
+      const existingIsObject =
+        typeof existingValue === "object" && !Array.isArray(existingValue);
+      const nextIsObject =
+        typeof nextValue === "object" && !Array.isArray(nextValue);
+
+      if (existingIsObject && nextIsObject) {
+        const mergedObject = { ...existingValue };
+        Object.entries(nextValue).forEach(([childKey, childValue]) => {
+          mergedObject[childKey] = mergePolicyValues(
+            mergedObject[childKey],
+            childValue,
+          );
+        });
+        return mergedObject;
+      }
+
+      const existingText = String(existingValue).trim();
+      const nextText = String(nextValue).trim();
+      if (!existingText) return nextValue;
+      if (!nextText) return existingValue;
+      if (existingText === nextText) return existingValue;
+      return `${existingText}\n${nextText}`;
+    };
+
+    const normalizePolicySource = (source) => {
+      if (Array.isArray(source)) {
+        return source.reduce((merged, entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            return merged;
+          }
+
+          Object.entries(entry).forEach(([entryKey, entryValue]) => {
+            merged[entryKey] = mergePolicyValues(merged[entryKey], entryValue);
+          });
+
+          return merged;
+        }, {});
+      }
+
+      if (source && typeof source === "object") {
+        return source;
+      }
+
+      return {};
+    };
+
+    return normalizePolicySource(rawPolicies);
   }, [rawPolicies]);
   const gstConfig = hotel?.gstConfig || null;
   const amenities = hotel?.amenities || [];
@@ -473,9 +552,14 @@ const HotelDetails = ({ navigation, route }) => {
 
   const monthlyDataSource = useMemo(() => {
     if (Array.isArray(monthlyData) && monthlyData.length) return monthlyData;
-    if (Array.isArray(hotel?.monthlyData) && hotel.monthlyData.length) return hotel.monthlyData;
-    if (Array.isArray(hotel?.monthlyPrices) && hotel.monthlyPrices.length) return hotel.monthlyPrices;
-    if (Array.isArray(hotel?.monthlyRoomPrices) && hotel.monthlyRoomPrices.length)
+    if (Array.isArray(hotel?.monthlyData) && hotel.monthlyData.length)
+      return hotel.monthlyData;
+    if (Array.isArray(hotel?.monthlyPrices) && hotel.monthlyPrices.length)
+      return hotel.monthlyPrices;
+    if (
+      Array.isArray(hotel?.monthlyRoomPrices) &&
+      hotel.monthlyRoomPrices.length
+    )
       return hotel.monthlyRoomPrices;
     if (Array.isArray(hotel?.monthlyPricing) && hotel.monthlyPricing.length)
       return hotel.monthlyPricing;
@@ -483,17 +567,61 @@ const HotelDetails = ({ navigation, route }) => {
   }, [monthlyData, hotel]);
 
   const formatPolicyValue = useCallback((key, value) => {
-    if (value === undefined || value === null || value === "") return null;
-    if (typeof value === "boolean") {
-      const lower = String(key).toLowerCase();
-      if (lower.includes("required")) return value ? "Required" : "Not required";
-      if (lower.includes("allowed")) return value ? "Allowed" : "Not allowed";
-      return value ? "Yes" : "No";
-    }
-    if (Array.isArray(value)) return value.join(", ");
-    if (typeof value === "object") return null;
-    const normalized = String(value).trim();
-    return normalized ? normalized : null;
+    const toPolicySubLabel = (rawKey) =>
+      String(rawKey || "")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+        .trim();
+
+    const serializeValue = (currentKey, currentValue, depth = 0) => {
+      if (
+        depth > 3 ||
+        currentValue === undefined ||
+        currentValue === null ||
+        currentValue === ""
+      ) {
+        return null;
+      }
+
+      if (typeof currentValue === "boolean") {
+        const lower = String(currentKey).toLowerCase();
+        if (lower.includes("required"))
+          return currentValue ? "Required" : "Not required";
+        if (lower.includes("allowed"))
+          return currentValue ? "Allowed" : "Not allowed";
+        return currentValue ? "Yes" : "No";
+      }
+
+      if (Array.isArray(currentValue)) {
+        const parts = currentValue
+          .map((item) => serializeValue(currentKey, item, depth + 1))
+          .filter(Boolean);
+        return parts.length ? parts.join("\n") : null;
+      }
+
+      if (typeof currentValue === "object") {
+        const nestedLines = Object.entries(currentValue)
+          .filter(([childKey]) => !POLICY_EXCLUDED_KEYS.has(childKey))
+          .map(([childKey, childValue]) => {
+            const formattedChildValue = serializeValue(
+              childKey,
+              childValue,
+              depth + 1,
+            );
+            if (!formattedChildValue) return null;
+            return `${toPolicySubLabel(childKey)}: ${formattedChildValue}`;
+          })
+          .filter(Boolean);
+
+        return nestedLines.length ? nestedLines.join("\n") : null;
+      }
+
+      const normalized = String(currentValue).trim();
+      return normalized ? normalized : null;
+    };
+
+    return serializeValue(key, value);
   }, []);
 
   const policyItems = useMemo(() => {
@@ -532,23 +660,111 @@ const HotelDetails = ({ navigation, route }) => {
     };
 
     const candidates = [
-      { key: "checkIn", keys: ["checkIn", "checkInPolicy"], label: "Check-in Time", icon: "log-in-outline" },
-      { key: "checkOut", keys: ["checkOut", "checkOutPolicy"], label: "Check-out Time", icon: "log-out-outline" },
-      { key: "outsideFood", keys: ["outsideFoodPolicy"], label: "Outside Food", icon: "restaurant-outline" },
-      { key: "paymentMode", keys: ["paymentMode"], label: "Payment Mode", icon: "card-outline" },
-      { key: "unmarriedCouplesAllowed", keys: ["unmarriedCouplesAllowed"], label: "Unmarried Couples", icon: "heart-outline" },
-      { key: "bachelorAllowed", keys: ["bachelorAllowed"], label: "Bachelors", icon: "people-outline" },
-      { key: "internationalGuestAllowed", keys: ["internationalGuestAllowed"], label: "International Guests", icon: "globe-outline" },
-      { key: "petsAllowed", keys: ["petsAllowed"], label: "Pets", icon: "paw-outline", source: restrictionSource },
-      { key: "smokingAllowed", keys: ["smokingAllowed"], label: "Smoking", icon: "flame-outline", source: restrictionSource },
-      { key: "alcoholAllowed", keys: ["alcoholAllowed"], label: "Alcohol", icon: "wine-outline", source: restrictionSource },
-      { key: "idProofRequired", keys: ["idProofRequired"], label: "ID Proof", icon: "card-outline" },
-      { key: "childPolicy", keys: ["childPolicy"], label: "Child Policy", icon: "happy-outline" },
-      { key: "extraBed", keys: ["extraBed"], label: "Extra Bed", icon: "bed-outline" },
-      { key: "ageRestriction", keys: ["ageRestriction"], label: "Age Restriction", icon: "alert-circle-outline" },
-      { key: "hotelPolicy", keys: ["hotelsPolicy"], label: "Hotel Policy", icon: "document-text-outline" },
-      { key: "cancellation", keys: ["cancellationText", "cancellationPolicy"], label: "Cancellation Policy", icon: "calendar-outline" },
-      { key: "refund", keys: ["refundPolicy"], label: "Refund Policy", icon: "cash-outline" },
+      {
+        key: "checkIn",
+        keys: ["checkIn", "checkInPolicy"],
+        label: "Check-in Time",
+        icon: "log-in-outline",
+      },
+      {
+        key: "checkOut",
+        keys: ["checkOut", "checkOutPolicy"],
+        label: "Check-out Time",
+        icon: "log-out-outline",
+      },
+      {
+        key: "outsideFood",
+        keys: ["outsideFoodPolicy"],
+        label: "Outside Food",
+        icon: "restaurant-outline",
+      },
+      {
+        key: "paymentMode",
+        keys: ["paymentMode"],
+        label: "Payment Mode",
+        icon: "card-outline",
+      },
+      {
+        key: "unmarriedCouplesAllowed",
+        keys: ["unmarriedCouplesAllowed"],
+        label: "Unmarried Couples",
+        icon: "heart-outline",
+      },
+      {
+        key: "bachelorAllowed",
+        keys: ["bachelorAllowed"],
+        label: "Bachelors",
+        icon: "people-outline",
+      },
+      {
+        key: "internationalGuestAllowed",
+        keys: ["internationalGuestAllowed"],
+        label: "International Guests",
+        icon: "globe-outline",
+      },
+      {
+        key: "petsAllowed",
+        keys: ["petsAllowed"],
+        label: "Pets",
+        icon: "paw-outline",
+        source: restrictionSource,
+      },
+      {
+        key: "smokingAllowed",
+        keys: ["smokingAllowed"],
+        label: "Smoking",
+        icon: "flame-outline",
+        source: restrictionSource,
+      },
+      {
+        key: "alcoholAllowed",
+        keys: ["alcoholAllowed"],
+        label: "Alcohol",
+        icon: "wine-outline",
+        source: restrictionSource,
+      },
+      {
+        key: "idProofRequired",
+        keys: ["idProofRequired"],
+        label: "ID Proof",
+        icon: "card-outline",
+      },
+      {
+        key: "childPolicy",
+        keys: ["childPolicy"],
+        label: "Child Policy",
+        icon: "happy-outline",
+      },
+      {
+        key: "extraBed",
+        keys: ["extraBed"],
+        label: "Extra Bed",
+        icon: "bed-outline",
+      },
+      {
+        key: "ageRestriction",
+        keys: ["ageRestriction"],
+        label: "Age Restriction",
+        icon: "alert-circle-outline",
+      },
+      {
+        key: "hotelPolicy",
+        keys: ["hotelsPolicy"],
+        label: "Hotel Policy",
+        icon: "document-text-outline",
+      },
+      {
+        key: "cancellation",
+        keys: ["cancellationText", "cancellationPolicy"],
+        label: "Cancellation Policy",
+        icon: "calendar-outline",
+      },
+      {
+        key: "refund",
+        keys: ["refundPolicy"],
+        label: "Refund Policy",
+        icon: "cash-outline",
+      },
     ];
 
     const baseItems = candidates
@@ -558,7 +774,7 @@ const HotelDetails = ({ navigation, route }) => {
           label: item.label,
           icon: item.icon,
           value: getPolicyValue(item.keys, item.source || policies),
-        })
+        }),
       )
       .filter(Boolean);
 
@@ -574,7 +790,12 @@ const HotelDetails = ({ navigation, route }) => {
     }
 
     Object.entries(policies || {}).forEach(([key, value]) => {
-      if (usedKeys.has(key) || POLICY_EXCLUDED_KEYS.has(key) || key === "restrictions" || key === "rules") {
+      if (
+        usedKeys.has(key) ||
+        POLICY_EXCLUDED_KEYS.has(key) ||
+        key === "restrictions" ||
+        key === "rules"
+      ) {
         return;
       }
       const formattedValue = formatPolicyValue(key, value);
@@ -585,7 +806,7 @@ const HotelDetails = ({ navigation, route }) => {
           label: toPolicyLabel(key),
           icon: "document-text-outline",
           value: formattedValue,
-        })
+        }),
       );
     });
 
@@ -593,12 +814,20 @@ const HotelDetails = ({ navigation, route }) => {
   }, [policies, formatPolicyValue]);
 
   const checkInPolicyValue = useMemo(
-    () => formatPolicyValue("checkIn", policies?.checkIn || policies?.checkInPolicy),
-    [policies, formatPolicyValue]
+    () =>
+      formatPolicyValue(
+        "checkIn",
+        policies?.checkIn || policies?.checkInPolicy,
+      ),
+    [policies, formatPolicyValue],
   );
   const checkOutPolicyValue = useMemo(
-    () => formatPolicyValue("checkOut", policies?.checkOut || policies?.checkOutPolicy),
-    [policies, formatPolicyValue]
+    () =>
+      formatPolicyValue(
+        "checkOut",
+        policies?.checkOut || policies?.checkOutPolicy,
+      ),
+    [policies, formatPolicyValue],
   );
   const checkInChipText = useMemo(() => {
     const value = String(checkInPolicyValue || "").trim();
@@ -611,11 +840,15 @@ const HotelDetails = ({ navigation, route }) => {
     const value = String(checkOutPolicyValue || "").trim();
     if (!value) return null;
     const lower = value.toLowerCase();
-    if (lower.includes("check out") || lower.includes("check-out")) return value;
+    if (lower.includes("check out") || lower.includes("check-out"))
+      return value;
     return `Check-out ${value}`;
   }, [checkOutPolicyValue]);
 
-  const galleryImages = useMemo(() => toList(basicInfo?.images).filter(Boolean), [basicInfo?.images]);
+  const galleryImages = useMemo(
+    () => toList(basicInfo?.images).filter(Boolean),
+    [basicInfo?.images],
+  );
   const mainImage = galleryImages[0];
   const otherImages = galleryImages.slice(1, 9);
 
@@ -626,7 +859,7 @@ const HotelDetails = ({ navigation, route }) => {
       setGalleryIndex(safeIndex);
       setGalleryModalVisible(true);
     },
-    [galleryImages]
+    [galleryImages],
   );
 
   const screenWidth = Dimensions.get("window").width;
@@ -636,15 +869,23 @@ const HotelDetails = ({ navigation, route }) => {
       if (!galleryImages.length) return;
       const safeIndex = clamp(index, 0, galleryImages.length - 1);
       setGalleryIndex(safeIndex);
-      galleryScrollRef.current?.scrollTo({ x: safeIndex * screenWidth, y: 0, animated });
+      galleryScrollRef.current?.scrollTo({
+        x: safeIndex * screenWidth,
+        y: 0,
+        animated,
+      });
     },
-    [galleryImages.length, screenWidth]
+    [galleryImages.length, screenWidth],
   );
 
   useEffect(() => {
     if (!galleryModalVisible) return;
     const rafId = requestAnimationFrame(() => {
-      galleryScrollRef.current?.scrollTo({ x: galleryIndex * screenWidth, y: 0, animated: false });
+      galleryScrollRef.current?.scrollTo({
+        x: galleryIndex * screenWidth,
+        y: 0,
+        animated: false,
+      });
     });
     return () => cancelAnimationFrame(rafId);
   }, [galleryModalVisible, galleryIndex, screenWidth]);
@@ -657,14 +898,15 @@ const HotelDetails = ({ navigation, route }) => {
         monthlyDataSource,
         roomId,
         checkInDate,
-        checkOutDate
+        checkOutDate,
       );
 
       const basePrice = getRoomBasePrice(room);
       const offerActive = isRoomOfferActive(room);
       const offerFinalPrice = resolveRoomFinalPrice(room);
       const offerOriginalPrice = resolveRoomOriginalPrice(room);
-      const effectiveBasePrice = offerFinalPrice > 0 ? offerFinalPrice : basePrice;
+      const effectiveBasePrice =
+        offerFinalPrice > 0 ? offerFinalPrice : basePrice;
       const effectiveOriginalPrice =
         offerOriginalPrice > 0
           ? offerOriginalPrice
@@ -684,7 +926,8 @@ const HotelDetails = ({ navigation, route }) => {
       const overridePrice = parseNumber(monthlyOverride?.monthPrice);
 
       // If selected date overlaps, apply override monthPrice as nightly.
-      const nightlyPrice = overridePrice > 0 ? overridePrice : effectiveBasePrice;
+      const nightlyPrice =
+        overridePrice > 0 ? overridePrice : effectiveBasePrice;
       const isOverrideApplied = overridePrice > 0;
       const showOfferPricing =
         !isOverrideApplied &&
@@ -721,8 +964,16 @@ const HotelDetails = ({ navigation, route }) => {
   // Always select the first available room if none is selected or if the selected room is no longer available
   useEffect(() => {
     if (!roomsWithPricing.length) return;
-    const available = roomsWithPricing.find((r) => !isRoomSoldOut(r) && getRoomId(r));
-    if (!selectedRoomId || !roomsWithPricing.some(r => String(getRoomId(r)) === String(selectedRoomId) && !isRoomSoldOut(r))) {
+    const available = roomsWithPricing.find(
+      (r) => !isRoomSoldOut(r) && getRoomId(r),
+    );
+    if (
+      !selectedRoomId ||
+      !roomsWithPricing.some(
+        (r) =>
+          String(getRoomId(r)) === String(selectedRoomId) && !isRoomSoldOut(r),
+      )
+    ) {
       if (available) setSelectedRoomId(getRoomId(available));
     }
   }, [roomsWithPricing, selectedRoomId, getRoomId, isRoomSoldOut]);
@@ -739,7 +990,9 @@ const HotelDetails = ({ navigation, route }) => {
   }, [dispatch, hotelId, selectedRoomId]);
 
   const selectedRoomData = useMemo(() => {
-    return roomsWithPricing.find((r) => String(getRoomId(r)) === String(selectedRoomId));
+    return roomsWithPricing.find(
+      (r) => String(getRoomId(r)) === String(selectedRoomId),
+    );
   }, [roomsWithPricing, selectedRoomId, getRoomId]);
 
   const currencySymbol =
@@ -764,7 +1017,9 @@ const HotelDetails = ({ navigation, route }) => {
       };
     }
 
-    const pricePerNight = selectedRoomData.__pricing?.nightlyPrice ?? getRoomBasePrice(selectedRoomData);
+    const pricePerNight =
+      selectedRoomData.__pricing?.nightlyPrice ??
+      getRoomBasePrice(selectedRoomData);
     const baseTotal = pricePerNight * roomsCount * nights;
 
     // Priority GST decision:
@@ -774,9 +1029,11 @@ const HotelDetails = ({ navigation, route }) => {
     // 4) Fallback slabs
     const roomTaxAmount = parseNumber(selectedRoomData?.pricing?.taxAmount);
     const roomTaxPercent = parseNumber(
-      selectedRoomData?.pricing?.taxPercent || selectedRoomData?.pricing?.gstPercent
+      selectedRoomData?.pricing?.taxPercent ||
+        selectedRoomData?.pricing?.gstPercent,
     );
-    const isMonthlyOverrideApplied = !!selectedRoomData?.__pricing?.isOverrideApplied;
+    const isMonthlyOverrideApplied =
+      !!selectedRoomData?.__pricing?.isOverrideApplied;
 
     let gstTotal = 0;
     let appliedTaxPercent = 0;
@@ -814,10 +1071,13 @@ const HotelDetails = ({ navigation, route }) => {
     const rawDiscount = parseNumber(
       discountAmount ||
         couponResult?.discountPrice ||
-        couponResult?.discountAmount
+        couponResult?.discountAmount,
     );
     const grossTotal = baseTotal + gstTotal;
-    const discountValue = Math.min(Math.max(rawDiscount, 0), Math.max(grossTotal, 0));
+    const discountValue = Math.min(
+      Math.max(rawDiscount, 0),
+      Math.max(grossTotal, 0),
+    );
 
     return {
       base: baseTotal,
@@ -856,7 +1116,9 @@ const HotelDetails = ({ navigation, route }) => {
     lastGstQueryRef.current = pricing.perNight;
 
     // call only if you really need it, else remove this effect
-    dispatch(getGstForHotelData({ type: "Hotel", gstThreshold: pricing.perNight }));
+    dispatch(
+      getGstForHotelData({ type: "Hotel", gstThreshold: pricing.perNight }),
+    );
   }, [dispatch, pricing?.perNight, gstData]);
 
   const navigateToHomeScreen = useCallback(() => {
@@ -883,11 +1145,20 @@ const HotelDetails = ({ navigation, route }) => {
     if (bookingStatus === "failed") {
       showError(
         "Booking Failed",
-        String(bookingError?.message || bookingError || "Something went wrong.")
+        String(
+          bookingError?.message || bookingError || "Something went wrong.",
+        ),
       );
       dispatch(resetBookingState());
     }
-  }, [bookingStatus, bookingError, dispatch, navigateToHomeScreen, showError, showSuccess]);
+  }, [
+    bookingStatus,
+    bookingError,
+    dispatch,
+    navigateToHomeScreen,
+    showError,
+    showSuccess,
+  ]);
 
   // Tab bar hidden via Tab Navigator options (App.js)
 
@@ -932,7 +1203,11 @@ const HotelDetails = ({ navigation, route }) => {
 
   const handleGuestsCountChange = useCallback((nextGuests) => {
     const normalizedGuests = clamp(nextGuests, 1, MAX_GUESTS);
-    const requiredRooms = clamp(getRequiredRoomsForGuests(normalizedGuests), 1, MAX_ROOMS);
+    const requiredRooms = clamp(
+      getRequiredRoomsForGuests(normalizedGuests),
+      1,
+      MAX_ROOMS,
+    );
 
     setGuestsCount(normalizedGuests);
     // Keep rooms synced both ways: guests + => rooms +, guests - => rooms -
@@ -945,7 +1220,9 @@ const HotelDetails = ({ navigation, route }) => {
 
     setRoomsCount(normalizedRooms);
     // If rooms reduced manually, trim guests to allowed capacity.
-    setGuestsCount((prevGuests) => clamp(Math.min(prevGuests, maxGuestsAllowed), 1, MAX_GUESTS));
+    setGuestsCount((prevGuests) =>
+      clamp(Math.min(prevGuests, maxGuestsAllowed), 1, MAX_GUESTS),
+    );
   }, []);
 
   const handleCouponInputChange = (value) => {
@@ -954,17 +1231,15 @@ const HotelDetails = ({ navigation, route }) => {
       .toUpperCase();
     setCouponCodeInput(normalized);
 
-    if (
-      couponStatus !== "idle" ||
-      appliedCoupon ||
-      discountAmount > 0
-    ) {
+    if (couponStatus !== "idle" || appliedCoupon || discountAmount > 0) {
       dispatch(resetCoupon());
     }
   };
 
   const handleApplyCoupon = async () => {
-    const code = String(couponCodeInput || "").trim().toUpperCase();
+    const code = String(couponCodeInput || "")
+      .trim()
+      .toUpperCase();
     if (!code) {
       return;
     }
@@ -984,7 +1259,7 @@ const HotelDetails = ({ navigation, route }) => {
           roomId: String(selectedRoomId),
           couponCode: code,
           userId: String(userId),
-        })
+        }),
       ).unwrap();
       setCouponCodeInput(code);
     } catch {
@@ -1017,7 +1292,7 @@ const HotelDetails = ({ navigation, route }) => {
     if (guestsCount > roomsCount * MAX_GUESTS_PER_ROOM) {
       showError(
         "Guest Limit Exceeded",
-        `Only ${MAX_GUESTS_PER_ROOM} guests are allowed per room.`
+        `Only ${MAX_GUESTS_PER_ROOM} guests are allowed per room.`,
       );
       return;
     }
@@ -1029,7 +1304,8 @@ const HotelDetails = ({ navigation, route }) => {
     }
 
     const selectedRoomPrice = parseNumber(
-      selectedRoomData?.__pricing?.nightlyPrice ?? getRoomBasePrice(selectedRoomData)
+      selectedRoomData?.__pricing?.nightlyPrice ??
+        getRoomBasePrice(selectedRoomData),
     );
 
     const payload = {
@@ -1048,8 +1324,12 @@ const HotelDetails = ({ navigation, route }) => {
       roomDetails: [
         {
           roomId: String(selectedRoomId),
-          type: String(selectedRoomData?.name || selectedRoomData?.type || "Room"),
-          bedTypes: String(selectedRoomData?.bedTypes || selectedRoomData?.bedType || ""),
+          type: String(
+            selectedRoomData?.name || selectedRoomData?.type || "Room",
+          ),
+          bedTypes: String(
+            selectedRoomData?.bedTypes || selectedRoomData?.bedType || "",
+          ),
           price: selectedRoomPrice,
         },
       ],
@@ -1061,16 +1341,21 @@ const HotelDetails = ({ navigation, route }) => {
       isPartialBooking: false,
       partialAmount: 0,
       destination:
-        basicInfo?.location?.city || basicInfo?.location?.state || hotel?.destination || "",
+        basicInfo?.location?.city ||
+        basicInfo?.location?.state ||
+        hotel?.destination ||
+        "",
       hotelName: basicInfo?.name || hotel?.hotelName || "",
       hotelEmail: basicInfo?.email || hotel?.email || hotel?.hotelEmail || "",
       hotelCity: basicInfo?.location?.city || hotel?.hotelCity || "",
       hotelOwnerName:
-        basicInfo?.ownerName || hotel?.hotelOwnerName || hotel?.createdBy?.user || "",
+        basicInfo?.ownerName ||
+        hotel?.hotelOwnerName ||
+        hotel?.createdBy?.user ||
+        "",
     };
 
-  
-    dispatch(createBooking(payload))
+    dispatch(createBooking(payload));
   };
 
   const handleGoBack = () => {
@@ -1110,15 +1395,26 @@ const HotelDetails = ({ navigation, route }) => {
     navigation?.navigate?.("PolicyScreen", {
       hotelName: basicInfo?.name || hotel?.hotelName || "Hotel",
       policyItems,
+      policySource: rawPolicies ?? policies,
     });
-  }, [navigation, basicInfo?.name, hotel?.hotelName, policyItems]);
+  }, [
+    navigation,
+    basicInfo?.name,
+    hotel?.hotelName,
+    policyItems,
+    rawPolicies,
+    policies,
+  ]);
 
-  const statusBarTopPadding = Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0;
-  const heroActionTop = statusBarTopPadding + (Platform.OS === "android" ? 10 : 44);
+  const statusBarTopPadding =
+    Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0;
+  const heroActionTop =
+    statusBarTopPadding + (Platform.OS === "android" ? 10 : 44);
 
   const safeAmenities = useMemo(() => {
     if (!amenities) return [];
-    if (Array.isArray(amenities)) return amenities.flat?.() ? amenities.flat() : amenities;
+    if (Array.isArray(amenities))
+      return amenities.flat?.() ? amenities.flat() : amenities;
     return [];
   }, [amenities]);
 
@@ -1151,8 +1447,13 @@ const HotelDetails = ({ navigation, route }) => {
     return (
       <View className="flex-1 bg-white items-center justify-center px-6">
         <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
-        <Text className="text-xl font-bold text-slate-800 mt-4">Unable to load details</Text>
-        <TouchableOpacity onPress={handleGoBack} className="mt-6 bg-[#0d3b8f] px-6 py-3 rounded-xl">
+        <Text className="text-xl font-bold text-slate-800 mt-4">
+          Unable to load details
+        </Text>
+        <TouchableOpacity
+          onPress={handleGoBack}
+          className="mt-6 bg-[#0d3b8f] px-6 py-3 rounded-xl"
+        >
           <Text className="text-white font-bold">Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -1166,8 +1467,15 @@ const HotelDetails = ({ navigation, route }) => {
         <View className="relative">
           <View className="h-80">
             {mainImage ? (
-              <TouchableOpacity activeOpacity={0.95} onPress={() => openGalleryAt(0)}>
-                <Image source={{ uri: mainImage }} className="w-full h-full" resizeMode="cover" />
+              <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={() => openGalleryAt(0)}
+              >
+                <Image
+                  source={{ uri: mainImage }}
+                  className="w-full h-full"
+                  resizeMode="cover"
+                />
               </TouchableOpacity>
             ) : (
               <View className="w-full h-full bg-slate-200 items-center justify-center">
@@ -1203,7 +1511,11 @@ const HotelDetails = ({ navigation, route }) => {
               contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
             >
               {otherImages.map((img, idx) => (
-                <TouchableOpacity key={`${img}-${idx}`} activeOpacity={0.9} onPress={() => openGalleryAt(idx + 1)}>
+                <TouchableOpacity
+                  key={`${img}-${idx}`}
+                  activeOpacity={0.9}
+                  onPress={() => openGalleryAt(idx + 1)}
+                >
                   <Image
                     source={{ uri: img }}
                     className="w-16 h-16 rounded-2xl border border-white/40"
@@ -1226,12 +1538,23 @@ const HotelDetails = ({ navigation, route }) => {
 
                 {!!basicInfo?.location && (
                   <View className="flex-row items-start mt-2">
-                    <Ionicons name="location-sharp" size={18} color="#64748b" className="mt-0.5" />
+                    <Ionicons
+                      name="location-sharp"
+                      size={18}
+                      color="#64748b"
+                      className="mt-0.5"
+                    />
                     <Text className="text-slate-500 text-sm ml-1.5 flex-1 leading-5">
                       {basicInfo?.location?.address || ""}
-                      {basicInfo?.location?.city ? `, ${basicInfo.location.city}` : ""}
-                      {basicInfo?.location?.state ? `, ${basicInfo.location.state}` : ""}
-                      {basicInfo?.location?.pinCode ? ` - ${basicInfo.location.pinCode}` : ""}
+                      {basicInfo?.location?.city
+                        ? `, ${basicInfo.location.city}`
+                        : ""}
+                      {basicInfo?.location?.state
+                        ? `, ${basicInfo.location.state}`
+                        : ""}
+                      {basicInfo?.location?.pinCode
+                        ? ` - ${basicInfo.location.pinCode}`
+                        : ""}
                     </Text>
                   </View>
                 )}
@@ -1250,13 +1573,25 @@ const HotelDetails = ({ navigation, route }) => {
                 <View className="flex-row" style={{ gap: 8 }}>
                   <View className="flex-1">
                     <Chip
-                      icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
+                      icon={
+                        <Ionicons
+                          name="time-outline"
+                          size={14}
+                          color="#0f172a"
+                        />
+                      }
                       text={checkInChipText}
                     />
                   </View>
                   <View className="flex-1">
                     <Chip
-                      icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
+                      icon={
+                        <Ionicons
+                          name="time-outline"
+                          size={14}
+                          color="#0f172a"
+                        />
+                      }
                       text={checkOutChipText}
                     />
                   </View>
@@ -1265,13 +1600,25 @@ const HotelDetails = ({ navigation, route }) => {
                 <View className="flex-row flex-wrap" style={{ gap: 8 }}>
                   {!!checkInChipText && (
                     <Chip
-                      icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
+                      icon={
+                        <Ionicons
+                          name="time-outline"
+                          size={14}
+                          color="#0f172a"
+                        />
+                      }
                       text={checkInChipText}
                     />
                   )}
                   {!!checkOutChipText && (
                     <Chip
-                      icon={<Ionicons name="time-outline" size={14} color="#0f172a" />}
+                      icon={
+                        <Ionicons
+                          name="time-outline"
+                          size={14}
+                          color="#0f172a"
+                        />
+                      }
                       text={checkOutChipText}
                     />
                   )}
@@ -1282,14 +1629,26 @@ const HotelDetails = ({ navigation, route }) => {
                 {!!pricingOverview?.lowestBasePrice && (
                   <Chip
                     tone="info"
-                    icon={<Ionicons name="pricetag-outline" size={14} color="#0d3b8f" />}
+                    icon={
+                      <Ionicons
+                        name="pricetag-outline"
+                        size={14}
+                        color="#0d3b8f"
+                      />
+                    }
                     text={`From ${currencySymbol}${parseNumber(pricingOverview.lowestBasePrice).toLocaleString()}`}
                   />
                 )}
                 {!!gstConfig?.enabled && (
                   <Chip
                     tone="success"
-                    icon={<Ionicons name="receipt-outline" size={14} color="#047857" />}
+                    icon={
+                      <Ionicons
+                        name="receipt-outline"
+                        size={14}
+                        color="#047857"
+                      />
+                    }
                     text={`GST Enabled (${parseNumber(gstConfig.rate)}%)`}
                   />
                 )}
@@ -1300,18 +1659,25 @@ const HotelDetails = ({ navigation, route }) => {
           {!!basicInfo?.description && (
             <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm mt-4">
               <Text className="text-slate-900 font-extrabold mb-2">About</Text>
-              <Text className="text-slate-600 text-sm leading-6">{basicInfo.description}</Text>
+              <Text className="text-slate-600 text-sm leading-6">
+                {basicInfo.description}
+              </Text>
             </View>
           )}
           {/* Stay card */}
           <View className="mt-5">
-            <SectionTitle title="Your Stay" />
+            <SectionTitle title="Your Booking Date" />
 
             <View className="bg-white rounded-[16px] border border-slate-300 overflow-hidden">
               <View className="p-2">
                 <View className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-3 flex-row items-center">
-                  <TouchableOpacity onPress={openCheckIn} className="flex-1 items-center px-2">
-                    <Text className="text-xs font-bold text-slate-700">Check-in:</Text>
+                  <TouchableOpacity
+                    onPress={openCheckIn}
+                    className="flex-1 items-center px-2"
+                  >
+                    <Text className="text-xs font-bold text-slate-700">
+                      Check-in:
+                    </Text>
                     <Text className="text-lg font-extrabold text-slate-900 mt-0.5">
                       {formatFullDate(checkInDate)}
                     </Text>
@@ -1321,8 +1687,13 @@ const HotelDetails = ({ navigation, route }) => {
                     <Ionicons name="arrow-forward" size={22} color="#0f172a" />
                   </View>
 
-                  <TouchableOpacity onPress={openCheckOut} className="flex-1 items-center px-2">
-                    <Text className="text-xs font-bold text-slate-700">Check-out:</Text>
+                  <TouchableOpacity
+                    onPress={openCheckOut}
+                    className="flex-1 items-center px-2"
+                  >
+                    <Text className="text-xs font-bold text-slate-700">
+                      Check-out:
+                    </Text>
                     <Text className="text-lg font-extrabold text-slate-900 mt-0.5">
                       {formatFullDate(checkOutDate)}
                     </Text>
@@ -1330,13 +1701,11 @@ const HotelDetails = ({ navigation, route }) => {
                 </View>
               </View>
 
-              <View className="px-3 pb-2 flex-row items-center justify-between">
-                <Text className="flex-1 text-xs font-semibold text-slate-700">
-                  {guestsCount} Guest{guestsCount > 1 ? "s" : ""} {"\u2022"} {roomsCount} Room
+              <View className="px-3 pb-2 items-center">
+                <Text className="text-xs font-semibold text-slate-700 text-center">
+                  {guestsCount} Guest{guestsCount > 1 ? "s" : ""} {"\u2022"}{" "}
+                  {roomsCount} Room
                   {roomsCount > 1 ? "s" : ""}
-                </Text>
-                <Text className="flex-1 text-xs font-semibold text-slate-700 text-right">
-                  {formatShortDate(checkInDate)} {"\u2192"} {formatShortDate(checkOutDate)}
                 </Text>
               </View>
 
@@ -1344,7 +1713,9 @@ const HotelDetails = ({ navigation, route }) => {
 
               <View className="px-3 py-4 flex-row items-center">
                 <View className="flex-1 items-center">
-                  <Text className="text-sm font-extrabold text-slate-800 mb-2">Guests:</Text>
+                  <Text className="text-sm font-extrabold text-slate-800 mb-2">
+                    Guests:
+                  </Text>
                   <View className="flex-row items-center">
                     <TouchableOpacity
                       onPress={() => handleGuestsCountChange(guestsCount - 1)}
@@ -1378,14 +1749,18 @@ const HotelDetails = ({ navigation, route }) => {
                       <Ionicons
                         name="add"
                         size={14}
-                        color={guestsCount >= MAX_GUESTS ? "#94a3b8" : "#0f172a"}
+                        color={
+                          guestsCount >= MAX_GUESTS ? "#94a3b8" : "#0f172a"
+                        }
                       />
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 <View className="flex-1 items-center">
-                  <Text className="text-sm font-extrabold text-slate-800 mb-2">Rooms:</Text>
+                  <Text className="text-sm font-extrabold text-slate-800 mb-2">
+                    Rooms:
+                  </Text>
                   <View className="flex-row items-center">
                     <TouchableOpacity
                       onPress={() => handleRoomsCountChange(roomsCount - 1)}
@@ -1435,17 +1810,26 @@ const HotelDetails = ({ navigation, route }) => {
               <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm">
                 <View className="flex-row flex-wrap gap-2">
                   {foods.slice(0, 24).map((f, idx) => {
-                    const label = typeof f === "string" ? f : f?.name || f?.title || JSON.stringify(f);
+                    const label =
+                      typeof f === "string"
+                        ? f
+                        : f?.name || f?.title || JSON.stringify(f);
                     return (
-                      <View key={`${label}-${idx}`} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-full">
-                        <Text className="text-xs font-bold text-slate-700">{label}</Text>
+                      <View
+                        key={`${label}-${idx}`}
+                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-full"
+                      >
+                        <Text className="text-xs font-bold text-slate-700">
+                          {label}
+                        </Text>
                       </View>
                     );
                   })}
                 </View>
                 {foods.length > 24 && (
                   <Text className="text-[10px] text-slate-400 mt-3">
-                    Showing 24 items. You can expand this list from API if needed.
+                    Showing 24 items. You can expand this list from API if
+                    needed.
                   </Text>
                 )}
               </View>
@@ -1459,7 +1843,9 @@ const HotelDetails = ({ navigation, route }) => {
                 title="Amenities"
                 right={
                   safeAmenities.length > 8 ? (
-                    <TouchableOpacity onPress={() => setShowAllAmenities((v) => !v)}>
+                    <TouchableOpacity
+                      onPress={() => setShowAllAmenities((v) => !v)}
+                    >
                       <Text className="text-xs font-extrabold text-[#0d3b8f]">
                         {showAllAmenities ? "Show less" : "View all"}
                       </Text>
@@ -1477,8 +1863,12 @@ const HotelDetails = ({ navigation, route }) => {
                       const rawAmenityName =
                         typeof item === "string"
                           ? item
-                          : item?.name || item?.title || item?.label || String(item);
-                      const amenityLabel = getAmenityDisplayName(rawAmenityName);
+                          : item?.name ||
+                            item?.title ||
+                            item?.label ||
+                            String(item);
+                      const amenityLabel =
+                        getAmenityDisplayName(rawAmenityName);
                       const amenityIcon = getAmenityIconName(rawAmenityName);
 
                       return (
@@ -1488,7 +1878,11 @@ const HotelDetails = ({ navigation, route }) => {
                             colIdx === 0 ? "mr-2" : ""
                           }`}
                         >
-                          <Ionicons name={amenityIcon} size={16} color="#16a34a" />
+                          <Ionicons
+                            name={amenityIcon}
+                            size={16}
+                            color="#16a34a"
+                          />
                           <Text
                             numberOfLines={1}
                             className="text-slate-700 text-xs font-bold ml-2 flex-1"
@@ -1512,9 +1906,14 @@ const HotelDetails = ({ navigation, route }) => {
               right={
                 !!selectedRoomData ? (
                   <View className="bg-blue-50 px-3 py-1.5 rounded-full flex-row items-center">
-                    <Ionicons name="pricetag-outline" size={14} color="#0d3b8f" />
+                    <Ionicons
+                      name="pricetag-outline"
+                      size={14}
+                      color="#0d3b8f"
+                    />
                     <Text className="text-[#0d3b8f] text-xs font-extrabold ml-2">
-                      {currencySymbol}{Math.round(pricing.perNight).toLocaleString()} / night
+                      {currencySymbol}
+                      {Math.round(pricing.perNight).toLocaleString()} / night
                     </Text>
                   </View>
                 ) : null
@@ -1527,24 +1926,25 @@ const HotelDetails = ({ navigation, route }) => {
               const availabilityMeta = getRoomAvailabilityMeta(room);
               const soldOut = availabilityMeta.soldOut;
 
-              const nightlyPrice = room.__pricing?.nightlyPrice ?? getRoomBasePrice(room);
+              const nightlyPrice =
+                room.__pricing?.nightlyPrice ?? getRoomBasePrice(room);
               const roomTaxPercent = parseNumber(
-                room?.pricing?.taxPercent || room?.pricing?.gstPercent
+                room?.pricing?.taxPercent || room?.pricing?.gstPercent,
               );
               const taxDisplay = roomTaxPercent
                 ? `${roomTaxPercent}%`
                 : room?.__pricing?.isOverrideApplied
-                ? "12%"
-                : pricing.appliedTaxPercent
-                ? `${pricing.appliedTaxPercent}%`
-                : "12%";
+                  ? "12%"
+                  : pricing.appliedTaxPercent
+                    ? `${pricing.appliedTaxPercent}%`
+                    : "12%";
 
               const availableCount = availabilityMeta.availableCount;
               const availabilityText = soldOut
                 ? "Sold Out"
                 : availabilityMeta.hasExplicitAvailable
-                ? `${availableCount} available`
-                : "Available";
+                  ? `${availableCount} available`
+                  : "Available";
 
               const key = roomId ?? room?.name ?? idx;
 
@@ -1557,7 +1957,9 @@ const HotelDetails = ({ navigation, route }) => {
                     setSelectedRoomId(roomId);
                   }}
                   className={`bg-white rounded-[22px] p-3 mb-3 border shadow-sm ${
-                    isSelected ? "border-blue-600 bg-blue-50/40 shadow-blue-100" : "border-slate-200"
+                    isSelected
+                      ? "border-blue-600 bg-blue-50/40 shadow-blue-100"
+                      : "border-slate-200"
                   }`}
                 >
                   <View className="flex-row">
@@ -1569,39 +1971,71 @@ const HotelDetails = ({ navigation, route }) => {
                       />
                     ) : (
                       <View className="w-[100px] h-[100px] rounded-xl bg-slate-200 items-center justify-center">
-                        <Ionicons name="image-outline" size={20} color="#94a3b8" />
+                        <Ionicons
+                          name="image-outline"
+                          size={20}
+                          color="#94a3b8"
+                        />
                       </View>
                     )}
 
-                    <View className="flex-1 ml-3 justify-between">
-                      <View>
-                        <View className="flex-row items-start justify-between">
-                          <Text className="text-[14px] font-extrabold text-slate-900 flex-1 pr-2" numberOfLines={1}>
+                    <View
+                      className="flex-1 ml-3 justify-between"
+                      style={{ minWidth: 0 }}
+                    >
+                      <View style={{ minWidth: 0 }}>
+                        <View
+                          className="flex-row items-start justify-between"
+                          style={{ minWidth: 0 }}
+                        >
+                          <Text
+                            className="text-[14px] font-extrabold text-slate-900 flex-1 pr-2"
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
                             {room?.name || "Room"}
                           </Text>
                           {isSelected && !soldOut && (
                             <View className="bg-blue-600 px-2 py-0.5 rounded-full flex-row items-center">
-                              <Ionicons name="checkmark" size={10} color="white" />
-                              <Text className="text-white text-[9px] font-bold ml-1">Selected</Text>
+                              <Ionicons
+                                name="checkmark"
+                                size={10}
+                                color="white"
+                              />
+                              <Text className="text-white text-[9px] font-bold ml-1">
+                                Selected
+                              </Text>
                             </View>
                           )}
                         </View>
                         {!!room?.bedType && (
-                          <Text className="text-slate-500 text-[10px] font-medium mt-0.5">
+                          <Text
+                            className="text-slate-500 text-[10px] font-medium mt-0.5"
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
                             {room.bedType}
                           </Text>
                         )}
 
-                        <View className="flex-row items-center gap-2 mt-1">
+                        <View
+                          className="flex-row flex-wrap items-center mt-1"
+                          style={{ gap: 6 }}
+                        >
                           <View
                             className={`flex-row items-center px-2 py-0.5 rounded-full border ${
                               soldOut
                                 ? "bg-orange-50 border-orange-200"
                                 : "bg-emerald-50 border-emerald-200"
                             }`}
+                            style={{ maxWidth: "100%" }}
                           >
                             <Ionicons
-                              name={soldOut ? "alert-circle-outline" : "checkmark-circle-outline"}
+                              name={
+                                soldOut
+                                  ? "alert-circle-outline"
+                                  : "checkmark-circle-outline"
+                              }
                               size={10}
                               color={soldOut ? "#f97316" : "#10b981"}
                             />
@@ -1615,8 +2049,15 @@ const HotelDetails = ({ navigation, route }) => {
                           </View>
 
                           {!!room?.__pricing?.isOverrideApplied && (
-                            <View className="flex-row items-center px-2 py-0.5 rounded-full border bg-blue-50 border-blue-200">
-                              <Ionicons name="flash-outline" size={10} color="#2563eb" />
+                            <View
+                              className="flex-row items-center px-2 py-0.5 rounded-full border bg-blue-50 border-blue-200"
+                              style={{ maxWidth: "100%" }}
+                            >
+                              <Ionicons
+                                name="flash-outline"
+                                size={10}
+                                color="#2563eb"
+                              />
                               <Text className="text-blue-700 text-[9px] font-bold ml-1">
                                 Monthly price
                               </Text>
@@ -1624,9 +2065,21 @@ const HotelDetails = ({ navigation, route }) => {
                           )}
 
                           {!!room?.__pricing?.offerActive && (
-                            <View className="flex-row items-center px-2 py-0.5 rounded-full border bg-rose-50 border-rose-200">
-                              <Ionicons name="pricetag-outline" size={10} color="#e11d48" />
-                              <Text className="text-rose-700 text-[9px] font-bold ml-1" numberOfLines={1}>
+                            <View
+                              className="flex-row items-center px-2 py-0.5 rounded-full border bg-rose-50 border-rose-200"
+                              style={{ maxWidth: "100%", flexShrink: 1 }}
+                            >
+                              <Ionicons
+                                name="pricetag-outline"
+                                size={10}
+                                color="#e11d48"
+                              />
+                              <Text
+                                className="text-rose-700 text-[9px] font-bold ml-1"
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                                style={{ flexShrink: 1 }}
+                              >
                                 {room?.__pricing?.offerLabel || "Offer"}
                               </Text>
                             </View>
@@ -1634,23 +2087,36 @@ const HotelDetails = ({ navigation, route }) => {
                         </View>
                       </View>
 
-                      <View className="flex-row items-center justify-between mt-2">
-                        <View>
-                          <Text className="text-[16px] font-extrabold text-slate-900">
-                            {currencySymbol}{Math.round(nightlyPrice).toLocaleString()}
+                      <View className="flex-row items-end justify-between mt-2">
+                        <View className="flex-1 pr-2" style={{ minWidth: 0 }}>
+                          <Text
+                            className="text-[16px] font-extrabold text-slate-900"
+                            numberOfLines={1}
+                          >
+                            {currencySymbol}
+                            {Math.round(nightlyPrice).toLocaleString()}
                           </Text>
                           {room?.__pricing?.showOfferPricing && (
-                            <View className="flex-row items-center mt-0.5">
+                            <View
+                              className="flex-row flex-wrap items-center mt-0.5"
+                              style={{ rowGap: 2 }}
+                            >
                               <Text className="text-[10px] font-bold text-slate-400 line-through">
                                 {currencySymbol}
                                 {Math.round(
                                   parseNumber(room?.__pricing?.originalPrice),
                                 ).toLocaleString()}
                               </Text>
-                              <Text className="text-[10px] font-black text-rose-600 ml-1.5">
+                              <Text
+                                className="text-[10px] font-black text-rose-600 ml-1.5"
+                                style={{ flexShrink: 1 }}
+                              >
                                 Save {currencySymbol}
                                 {Math.round(
-                                  getRoomOfferDisplayDiscount(room, nightlyPrice),
+                                  getRoomOfferDisplayDiscount(
+                                    room,
+                                    nightlyPrice,
+                                  ),
                                 ).toLocaleString()}
                               </Text>
                             </View>
@@ -1667,8 +2133,8 @@ const HotelDetails = ({ navigation, route }) => {
                             soldOut
                               ? "bg-slate-100"
                               : isSelected
-                              ? "bg-blue-600"
-                              : "border border-blue-200 bg-white"
+                                ? "bg-blue-600"
+                                : "border border-blue-200 bg-white"
                           }`}
                         >
                           <Text
@@ -1676,11 +2142,15 @@ const HotelDetails = ({ navigation, route }) => {
                               soldOut
                                 ? "text-slate-400"
                                 : isSelected
-                                ? "text-white"
-                                : "text-blue-700"
+                                  ? "text-white"
+                                  : "text-blue-700"
                             }`}
                           >
-                            {soldOut ? "Unavailable" : isSelected ? "Selected" : "Select"}
+                            {soldOut
+                              ? "Unavailable"
+                              : isSelected
+                                ? "Selected"
+                                : "Select"}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -1709,10 +2179,16 @@ const HotelDetails = ({ navigation, route }) => {
                 </View>
 
                 <TouchableOpacity
-                  onPress={appliedCoupon ? handleClearCoupon : handleApplyCoupon}
+                  onPress={
+                    appliedCoupon ? handleClearCoupon : handleApplyCoupon
+                  }
                   disabled={couponStatus === "loading"}
                   className={`ml-2 px-4 h-11 rounded-xl items-center justify-center ${
-                    couponStatus === "loading" ? "bg-slate-300" : appliedCoupon ? "bg-slate-200" : "bg-[#0d3b8f]"
+                    couponStatus === "loading"
+                      ? "bg-slate-300"
+                      : appliedCoupon
+                        ? "bg-slate-200"
+                        : "bg-[#0d3b8f]"
                   }`}
                 >
                   {couponStatus === "loading" ? (
@@ -1735,13 +2211,16 @@ const HotelDetails = ({ navigation, route }) => {
                     {appliedCoupon} applied
                   </Text>
                   <Text className="text-[11px] font-extrabold text-emerald-700">
-                    -{currencySymbol}{Math.round(pricing.discount).toLocaleString()}
+                    -{currencySymbol}
+                    {Math.round(pricing.discount).toLocaleString()}
                   </Text>
                 </View>
               )}
 
               {couponStatus === "failed" && !!couponError && (
-                <Text className="mt-2 text-[11px] font-bold text-rose-600">{couponError}</Text>
+                <Text className="mt-2 text-[11px] font-bold text-rose-600">
+                  {couponError}
+                </Text>
               )}
             </View>
           </View>
@@ -1751,20 +2230,26 @@ const HotelDetails = ({ navigation, route }) => {
             <SectionTitle title="Policies" />
             <View className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm">
               {policyItems.length === 0 ? (
-                <Text className="text-xs text-slate-500">No policies available.</Text>
+                <Text className="text-xs text-slate-500">
+                  No policies available.
+                </Text>
               ) : (
                 previewPolicies.map((item, idx) => (
                   <View key={`${item.key}-${idx}`}>
                     <View className="flex-row items-start justify-between">
                       <View className="flex-row items-center">
                         <Ionicons name={item.icon} size={14} color="#64748b" />
-                        <Text className="text-xs font-bold text-slate-500 ml-2">{item.label}</Text>
+                        <Text className="text-xs font-bold text-slate-500 ml-2">
+                          {item.label}
+                        </Text>
                       </View>
                       <Text className="text-xs font-extrabold text-slate-900 ml-4 flex-1 text-right">
                         {item.value}
                       </Text>
                     </View>
-                    {idx < previewPolicies.length - 1 && <View className="h-[1px] bg-slate-100 my-3" />}
+                    {idx < previewPolicies.length - 1 && (
+                      <View className="h-[1px] bg-slate-100 my-3" />
+                    )}
                   </View>
                 ))
               )}
@@ -1775,8 +2260,14 @@ const HotelDetails = ({ navigation, route }) => {
                     onPress={handleViewAllPolicies}
                     className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
                   >
-                    <Text className="text-xs font-extrabold text-[#0d3b8f]">View All Policy</Text>
-                    <Ionicons name="chevron-forward" size={14} color="#0d3b8f" />
+                    <Text className="text-xs font-extrabold text-[#0d3b8f]">
+                      View All Policy
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={14}
+                      color="#0d3b8f"
+                    />
                   </TouchableOpacity>
                 </>
               )}
@@ -1803,7 +2294,9 @@ const HotelDetails = ({ navigation, route }) => {
               <Ionicons name="close" size={22} color="white" />
             </TouchableOpacity>
             <Text className="text-white text-xs font-bold bg-black/40 px-3 py-1.5 rounded-full">
-              {galleryImages.length ? `${galleryIndex + 1} / ${galleryImages.length}` : "0 / 0"}
+              {galleryImages.length
+                ? `${galleryIndex + 1} / ${galleryImages.length}`
+                : "0 / 0"}
             </Text>
           </View>
 
@@ -1814,13 +2307,25 @@ const HotelDetails = ({ navigation, route }) => {
             showsHorizontalScrollIndicator={false}
             className="flex-1"
             onMomentumScrollEnd={(event) => {
-              const nextIndex = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
-              setGalleryIndex(clamp(nextIndex, 0, Math.max(galleryImages.length - 1, 0)));
+              const nextIndex = Math.round(
+                event.nativeEvent.contentOffset.x / screenWidth,
+              );
+              setGalleryIndex(
+                clamp(nextIndex, 0, Math.max(galleryImages.length - 1, 0)),
+              );
             }}
           >
             {galleryImages.map((img, idx) => (
-              <View key={`${img}-${idx}`} style={{ width: screenWidth }} className="flex-1 items-center justify-center px-2">
-                <Image source={{ uri: img }} className="w-full h-[75%]" resizeMode="contain" />
+              <View
+                key={`${img}-${idx}`}
+                style={{ width: screenWidth }}
+                className="flex-1 items-center justify-center px-2"
+              >
+                <Image
+                  source={{ uri: img }}
+                  className="w-full h-[75%]"
+                  resizeMode="contain"
+                />
               </View>
             ))}
           </ScrollView>
@@ -1828,13 +2333,25 @@ const HotelDetails = ({ navigation, route }) => {
           {galleryImages.length > 1 && (
             <View className="absolute bottom-10 left-0 right-0 px-8 flex-row items-center justify-between">
               <TouchableOpacity
-                onPress={() => goToGalleryIndex(galleryIndex > 0 ? galleryIndex - 1 : galleryImages.length - 1)}
+                onPress={() =>
+                  goToGalleryIndex(
+                    galleryIndex > 0
+                      ? galleryIndex - 1
+                      : galleryImages.length - 1,
+                  )
+                }
                 className="w-11 h-11 rounded-full bg-black/40 items-center justify-center border border-white/20"
               >
                 <Ionicons name="chevron-back" size={24} color="white" />
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => goToGalleryIndex(galleryIndex < galleryImages.length - 1 ? galleryIndex + 1 : 0)}
+                onPress={() =>
+                  goToGalleryIndex(
+                    galleryIndex < galleryImages.length - 1
+                      ? galleryIndex + 1
+                      : 0,
+                  )
+                }
                 className="w-11 h-11 rounded-full bg-black/40 items-center justify-center border border-white/20"
               >
                 <Ionicons name="chevron-forward" size={24} color="white" />
@@ -1851,14 +2368,18 @@ const HotelDetails = ({ navigation, route }) => {
             {roomsCount} room | {guestsCount} guest | {nights} night
           </Text>
           <Text className="text-2xl font-extrabold text-[#0d3b8f]">
-            {currencySymbol}{Math.round(pricing.finalTotal).toLocaleString()}
+            {currencySymbol}
+            {Math.round(pricing.finalTotal).toLocaleString()}
           </Text>
           <Text className="text-[10px] text-slate-400 mt-1">
             {`${currencySymbol}${Math.round(pricing.base).toLocaleString()} + ${currencySymbol}${Math.round(pricing.tax).toLocaleString()} tax`}
           </Text>
         </View>
 
-        <TouchableOpacity onPress={handleBookNow} className="bg-[#0d3b8f] px-8 py-4 rounded-2xl">
+        <TouchableOpacity
+          onPress={handleBookNow}
+          className="bg-[#0d3b8f] px-8 py-4 rounded-2xl"
+        >
           <Text className="text-white font-extrabold text-base">Book Now</Text>
         </TouchableOpacity>
       </View>
@@ -1870,12 +2391,20 @@ const HotelDetails = ({ navigation, route }) => {
         visible={bookingModalVisible}
         onRequestClose={() => setBookingModalVisible(false)}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="flex-1"
+        >
           <View className="flex-1 bg-black/50 justify-end">
             <View className="bg-white rounded-t-3xl h-[88%]">
               <View className="flex-row justify-between items-center px-6 py-4 border-b border-slate-100">
-                <Text className="text-lg font-extrabold text-slate-800">Confirm Booking</Text>
-                <TouchableOpacity onPress={() => setBookingModalVisible(false)} className="bg-slate-100 p-2 rounded-full">
+                <Text className="text-lg font-extrabold text-slate-800">
+                  Confirm Booking
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setBookingModalVisible(false)}
+                  className="bg-slate-100 p-2 rounded-full"
+                >
                   <Ionicons name="close" size={20} color="#64748b" />
                 </TouchableOpacity>
               </View>
@@ -1883,15 +2412,22 @@ const HotelDetails = ({ navigation, route }) => {
               <ScrollView className="p-6" keyboardShouldPersistTaps="handled">
                 <View className="bg-blue-50 p-4 rounded-2xl mb-6 flex-row gap-3">
                   {!!selectedRoomData?.images?.[0] && (
-                    <Image source={{ uri: selectedRoomData.images[0] }} className="w-16 h-16 rounded-2xl bg-slate-200" />
+                    <Image
+                      source={{ uri: selectedRoomData.images[0] }}
+                      className="w-16 h-16 rounded-2xl bg-slate-200"
+                    />
                   )}
                   <View className="flex-1">
-                    <Text className="font-extrabold text-slate-900 text-sm mb-1">{basicInfo?.name}</Text>
+                    <Text className="font-extrabold text-slate-900 text-sm mb-1">
+                      {basicInfo?.name}
+                    </Text>
                     <Text className="text-slate-600 text-xs mb-1">
-                      {selectedRoomData?.name} | {roomsCount} room | {guestsCount} guest
+                      {selectedRoomData?.name} | {roomsCount} room |{" "}
+                      {guestsCount} guest
                     </Text>
                     <Text className="text-[#0d3b8f] font-extrabold text-xs">
-                      {formatFullDate(checkInDate)} - {formatFullDate(checkOutDate)}
+                      {formatFullDate(checkInDate)} -{" "}
+                      {formatFullDate(checkOutDate)}
                     </Text>
                     {!!selectedRoomData?.__pricing?.isOverrideApplied && (
                       <Text className="text-[10px] font-extrabold text-emerald-700 mt-1">
@@ -1901,56 +2437,91 @@ const HotelDetails = ({ navigation, route }) => {
                   </View>
                 </View>
 
-                <Text className="text-slate-900 font-extrabold mb-3 text-base">Guest Details</Text>
+                <Text className="text-slate-900 font-extrabold mb-3 text-base">
+                  Guest Details
+                </Text>
 
                 <View className="mb-6">
-                  <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase ml-1">Full Name</Text>
+                  <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase ml-1">
+                    Full Name
+                  </Text>
                   <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 h-12 mb-4">
                     <Ionicons name="person-outline" size={18} color="#64748b" />
-                    <TextInput className="flex-1 ml-3 text-slate-900 font-bold" placeholder="John Doe" value={guestName} onChangeText={setGuestName} />
+                    <TextInput
+                      className="flex-1 ml-3 text-slate-900 font-bold"
+                      placeholder="John Doe"
+                      value={guestName}
+                      onChangeText={setGuestName}
+                    />
                   </View>
 
-                  <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase ml-1">Phone Number</Text>
+                  <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase ml-1">
+                    Phone Number
+                  </Text>
                   <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 h-12 mb-4">
                     <Ionicons name="call-outline" size={18} color="#64748b" />
-                    <TextInput className="flex-1 ml-3 text-slate-900 font-bold" placeholder="+91 98765 43210" keyboardType="phone-pad" value={guestPhone} onChangeText={setGuestPhone} />
+                    <TextInput
+                      className="flex-1 ml-3 text-slate-900 font-bold"
+                      placeholder="+91 98765 43210"
+                      keyboardType="phone-pad"
+                      value={guestPhone}
+                      onChangeText={setGuestPhone}
+                    />
                   </View>
 
-                  <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase ml-1">Email Address</Text>
+                  <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase ml-1">
+                    Email Address
+                  </Text>
                   <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 h-12">
                     <Ionicons name="mail-outline" size={18} color="#64748b" />
-                    <TextInput className="flex-1 ml-3 text-slate-900 font-bold" placeholder="john@example.com" keyboardType="email-address" autoCapitalize="none" value={guestEmail} onChangeText={setGuestEmail} />
+                    <TextInput
+                      className="flex-1 ml-3 text-slate-900 font-bold"
+                      placeholder="john@example.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      value={guestEmail}
+                      onChangeText={setGuestEmail}
+                    />
                   </View>
                 </View>
 
                 <View className="bg-slate-50 rounded-2xl p-4 mb-8">
-                  <Text className="text-slate-900 font-extrabold mb-3 text-sm">Price Breakdown</Text>
+                  <Text className="text-slate-900 font-extrabold mb-3 text-sm">
+                    Price Breakdown
+                  </Text>
 
                   <View className="flex-row justify-between mb-2">
                     <Text className="text-slate-500 text-xs">
                       Room Subtotal ({nights} night{nights > 1 ? "s" : ""})
                     </Text>
                     <Text className="text-slate-700 font-bold text-xs">
-                      {currencySymbol}{Math.round(pricing.base).toLocaleString()}
+                      {currencySymbol}
+                      {Math.round(pricing.base).toLocaleString()}
                     </Text>
                   </View>
 
                   <View className="flex-row justify-between mb-2">
                     <Text className="text-slate-500 text-xs">
-                      {pricing.taxLabel || "GST / Taxes"} {pricing.appliedTaxPercent ? `(${pricing.appliedTaxPercent}%)` : ""}
+                      {pricing.taxLabel || "GST / Taxes"}{" "}
+                      {pricing.appliedTaxPercent
+                        ? `(${pricing.appliedTaxPercent}%)`
+                        : ""}
                     </Text>
                     <Text className="text-slate-700 font-bold text-xs">
-                      {currencySymbol}{Math.round(pricing.tax).toLocaleString()}
+                      {currencySymbol}
+                      {Math.round(pricing.tax).toLocaleString()}
                     </Text>
                   </View>
 
                   {pricing.couponApplied && (
                     <View className="flex-row justify-between mb-2">
                       <Text className="text-emerald-600 text-xs font-bold">
-                        Coupon Discount {appliedCoupon ? `(${appliedCoupon})` : ""}
+                        Coupon Discount{" "}
+                        {appliedCoupon ? `(${appliedCoupon})` : ""}
                       </Text>
                       <Text className="text-emerald-700 font-extrabold text-xs">
-                        -{currencySymbol}{Math.round(pricing.discount).toLocaleString()}
+                        -{currencySymbol}
+                        {Math.round(pricing.discount).toLocaleString()}
                       </Text>
                     </View>
                   )}
@@ -1958,9 +2529,12 @@ const HotelDetails = ({ navigation, route }) => {
                   <View className="h-[1px] bg-slate-200 my-2" />
 
                   <View className="flex-row justify-between">
-                    <Text className="text-slate-900 font-extrabold text-sm">Total Amount</Text>
+                    <Text className="text-slate-900 font-extrabold text-sm">
+                      Total Amount
+                    </Text>
                     <Text className="text-[#0d3b8f] font-extrabold text-lg">
-                      {currencySymbol}{Math.round(pricing.finalTotal).toLocaleString()}
+                      {currencySymbol}
+                      {Math.round(pricing.finalTotal).toLocaleString()}
                     </Text>
                   </View>
 
@@ -1981,7 +2555,9 @@ const HotelDetails = ({ navigation, route }) => {
                   {bookingStatus === "loading" ? (
                     <ActivityIndicator color="white" />
                   ) : (
-                    <Text className="text-white font-extrabold text-lg">Confirm & Pay</Text>
+                    <Text className="text-white font-extrabold text-lg">
+                      Confirm & Pay
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1991,12 +2567,18 @@ const HotelDetails = ({ navigation, route }) => {
       </Modal>
 
       {/* Date Picker Modal */}
-      <Modal animationType="fade" transparent visible={showDateModal} onRequestClose={() => setShowDateModal(false)}>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={showDateModal}
+        onRequestClose={() => setShowDateModal(false)}
+      >
         <View className="flex-1 bg-black/60 justify-center items-center px-6">
           <View className="bg-white w-full rounded-2xl p-4">
             <View className="flex-row justify-between items-center mb-4 pb-4 border-b border-slate-100">
               <Text className="text-lg font-extrabold text-slate-800">
-                Select {dateModalTarget === "in" ? "Check-in" : "Check-out"} Date
+                Select {dateModalTarget === "in" ? "Check-in" : "Check-out"}{" "}
+                Date
               </Text>
               <TouchableOpacity onPress={() => setShowDateModal(false)}>
                 <Ionicons name="close-circle" size={24} color="#94a3b8" />
@@ -2004,15 +2586,38 @@ const HotelDetails = ({ navigation, route }) => {
             </View>
 
             <View className="flex-row justify-between items-center mb-4 px-2">
-              <TouchableOpacity onPress={() => setCalendarBase(new Date(calendarBase.getFullYear(), calendarBase.getMonth() - 1, 1))}>
+              <TouchableOpacity
+                onPress={() =>
+                  setCalendarBase(
+                    new Date(
+                      calendarBase.getFullYear(),
+                      calendarBase.getMonth() - 1,
+                      1,
+                    ),
+                  )
+                }
+              >
                 <Ionicons name="chevron-back" size={24} color="#334155" />
               </TouchableOpacity>
 
               <Text className="text-base font-extrabold text-slate-700">
-                {calendarBase.toLocaleString("default", { month: "long", year: "numeric" })}
+                {calendarBase.toLocaleString("default", {
+                  month: "long",
+                  year: "numeric",
+                })}
               </Text>
 
-              <TouchableOpacity onPress={() => setCalendarBase(new Date(calendarBase.getFullYear(), calendarBase.getMonth() + 1, 1))}>
+              <TouchableOpacity
+                onPress={() =>
+                  setCalendarBase(
+                    new Date(
+                      calendarBase.getFullYear(),
+                      calendarBase.getMonth() + 1,
+                      1,
+                    ),
+                  )
+                }
+              >
                 <Ionicons name="chevron-forward" size={24} color="#334155" />
               </TouchableOpacity>
             </View>
@@ -2020,7 +2625,10 @@ const HotelDetails = ({ navigation, route }) => {
             <View className="mb-2">
               <View className="flex-row justify-between mb-2">
                 {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-                  <Text key={i} className="text-slate-400 font-bold w-[13%] text-center text-xs">
+                  <Text
+                    key={i}
+                    className="text-slate-400 font-bold w-[13%] text-center text-xs"
+                  >
                     {d}
                   </Text>
                 ))}
@@ -2032,12 +2640,14 @@ const HotelDetails = ({ navigation, route }) => {
                     const selectedDate = new Date(
                       calendarBase.getFullYear(),
                       calendarBase.getMonth() + dayObj.monthOffset,
-                      dayObj.day
+                      dayObj.day,
                     );
 
-                    const activeDate = dateModalTarget === "in" ? checkInDate : checkOutDate;
+                    const activeDate =
+                      dateModalTarget === "in" ? checkInDate : checkOutDate;
                     const isSelected =
-                      toDateOnly(selectedDate).toDateString() === toDateOnly(activeDate).toDateString();
+                      toDateOnly(selectedDate).toDateString() ===
+                      toDateOnly(activeDate).toDateString();
 
                     const disabled = !dayObj.inMonth;
 
@@ -2048,7 +2658,9 @@ const HotelDetails = ({ navigation, route }) => {
                         onPress={() => applySelectedDate(selectedDate)}
                         className={`w-[13%] aspect-square items-center justify-center rounded-full ${isSelected ? "bg-blue-600" : ""}`}
                       >
-                        <Text className={`${disabled ? "text-transparent" : isSelected ? "text-white font-extrabold" : "text-slate-700 font-bold"}`}>
+                        <Text
+                          className={`${disabled ? "text-transparent" : isSelected ? "text-white font-extrabold" : "text-slate-700 font-bold"}`}
+                        >
                           {dayObj.day}
                         </Text>
                       </TouchableOpacity>
@@ -2059,11 +2671,19 @@ const HotelDetails = ({ navigation, route }) => {
             </View>
 
             <View className="flex-row justify-between mt-2">
-              <TouchableOpacity onPress={() => setCalendarBase(new Date())} className="px-4 py-3 rounded-xl bg-slate-100">
-                <Text className="text-slate-700 font-extrabold text-xs">Today</Text>
+              <TouchableOpacity
+                onPress={() => setCalendarBase(new Date())}
+                className="px-4 py-3 rounded-xl bg-slate-100"
+              >
+                <Text className="text-slate-700 font-extrabold text-xs">
+                  Today
+                </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => setShowDateModal(false)} className="px-4 py-3 rounded-xl bg-[#0d3b8f]">
+              <TouchableOpacity
+                onPress={() => setShowDateModal(false)}
+                className="px-4 py-3 rounded-xl bg-[#0d3b8f]"
+              >
                 <Text className="text-white font-extrabold text-xs">Done</Text>
               </TouchableOpacity>
             </View>
@@ -2075,4 +2695,3 @@ const HotelDetails = ({ navigation, route }) => {
 };
 
 export default HotelDetails;
-
